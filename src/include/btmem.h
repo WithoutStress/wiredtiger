@@ -228,6 +228,9 @@ struct __wt_ovfl_reuse {
 #define WT_HS_KEY_FORMAT WT_UNCHECKED_STRING(IuQQ)
 #define WT_HS_VALUE_FORMAT WT_UNCHECKED_STRING(QQQu)
 
+#define WT_VS_KEY_FORMAT WT_UNCHECKED_STRING(IuQu)
+#define WT_VS_VALUE_FORMAT WT_UNCHECKED_STRING(QQQu)
+
 #define WT_HS_CONFIG                                                   \
     "key_format=" WT_HS_KEY_FORMAT ",value_format=" WT_HS_VALUE_FORMAT \
     ",block_compressor=" WT_HS_COMPRESSOR                              \
@@ -235,13 +238,13 @@ struct __wt_ovfl_reuse {
     ",leaf_value_max=64MB"                                             \
     ",prefix_compression=false"
   
-/*
-#define WT_HS_CONFIG                                                   \
-    "key_format=" WT_HS_KEY_FORMAT ",value_format=" WT_HS_VALUE_FORMAT \
-    ",block_compressor=" WT_HS_COMPRESSOR                              \
-    ",type=lsm,lsm=(auto_throttle=false, chunk_size=64MB)"             \
+// The version store shares the config of history store
+#define WT_VS_CONFIG                                                   \
+    "key_format=" WT_VS_KEY_FORMAT ",value_format=" WT_VS_VALUE_FORMAT \
+    ",block_compressor=none"                                           \
+    ",internal_page_max=16KB"                                          \
+    ",leaf_value_max=64MB"                                             \
     ",prefix_compression=false"
-*/
 
 /*
  * WT_SAVE_UPD --

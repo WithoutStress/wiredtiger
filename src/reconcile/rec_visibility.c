@@ -18,6 +18,7 @@ __rec_update_save(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_INSERT *ins, WT_
 {
     WT_SAVE_UPD *supd;
 
+    // TONY: This could happen in cases where the head is TOMBSTONE, and we're saving a record with vid
     WT_ASSERT_ALWAYS(session, onpage_upd != NULL || supd_restore,
       "If nothing is committed, the update chain must be restored");
     WT_ASSERT_ALWAYS(session,
@@ -258,6 +259,10 @@ __rec_need_save_upd(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_UPDATE_SELECT 
     WT_UPDATE *upd;
     bool supd_restore, visible_all;
 
+    // This chain contains a version ID, should be saved to Version Store
+    if (upd_select->upd && upd_select->upd->vid_size != 0)
+        return (true);
+
     if (upd_select->tw.prepare)
         return (true);
 
@@ -492,6 +497,7 @@ __rec_calc_upd_memsize(WT_UPDATE *onpage_upd, WT_UPDATE *tombstone, size_t upd_m
      * FIXME-WT-9182: figure out what should be included in the calculation of the size of the saved
      * update chains.
      */
+    // ADD up size that we are going to save to disk
     if (onpage_upd != NULL) {
         for (upd = tombstone != NULL ? tombstone : onpage_upd; upd != NULL; upd = upd->next)
             if (upd->txnid != WT_TXN_ABORTED)
@@ -512,12 +518,13 @@ __rec_upd_select(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_UPDATE *first_upd
     WT_UPDATE *upd;
     wt_timestamp_t max_ts;
     uint64_t max_txn, session_txnid, txnid;
-    bool is_hs_page;
+    bool is_hs_page, is_vs_page;
     bool seen_prepare;
 
     max_ts = WT_TS_NONE;
     max_txn = WT_TXN_NONE;
     is_hs_page = F_ISSET(session->dhandle, WT_DHANDLE_HS);
+    is_vs_page = F_ISSET(session->dhandle, WT_DHANDLE_VS);
     session_txnid = WT_SESSION_TXN_SHARED(session)->id;
     seen_prepare = false;
 
@@ -530,6 +537,8 @@ __rec_upd_select(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_UPDATE *first_upd
          */
         if (*first_txn_updp == NULL)
             *first_txn_updp = upd;
+
+        // Checkpoint가 이 tree를 버려되 되는지 판단하기 위해
         if (WT_TXNID_LT(max_txn, txnid))
             max_txn = txnid;
 
@@ -563,8 +572,10 @@ __rec_upd_select(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_UPDATE *first_upd
               WT_UPDATE_DS | WT_UPDATE_PREPARE_RESTORED_FROM_DS | WT_UPDATE_RESTORED_FROM_DS |
                 WT_UPDATE_RESTORED_FROM_HS) &&
           !is_hs_page &&
+          !is_vs_page &&
           (F_ISSET(r, WT_REC_VISIBLE_ALL) ? WT_TXNID_LE(r->last_running, txnid) :
                                             !__txn_visible_id(session, txnid))) {
+            // Not commited yet, or this reconcile(snapshot) cannot see this update
             /*
              * Rare case: metadata writes at read uncommitted isolation level, eviction may see a
              * committed update followed by uncommitted updates. Give up in that case because we
@@ -815,6 +826,7 @@ __wt_rec_upd_select(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_INSERT *ins, W
             return (0);
     }
 
+    // Now we're going to select the final visible version and update chains here
     WT_RET(__rec_upd_select(
       session, r, first_upd, upd_select, &first_txn_upd, &has_newer_updates, &upd_memsize));
 
@@ -863,6 +875,7 @@ __wt_rec_upd_select(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_INSERT *ins, W
     if (has_newer_updates)
         r->leave_dirty = true;
 
+    // Tombstone이라면 onpage_upd는 NULL을 저장한다...
     onpage_upd = upd_select->upd != NULL && upd_select->upd->type == WT_UPDATE_TOMBSTONE ?
       NULL :
       upd_select->upd;
@@ -936,7 +949,7 @@ __wt_rec_upd_select(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_INSERT *ins, W
      *
      * Additionally history store reconciliation is not set skip saving an update.
      */
-    if (__rec_need_save_upd(session, r, upd_select, vpack, has_newer_updates) || (upd_select->upd && upd_select->upd->vid_size != 0)) {
+    if (__rec_need_save_upd(session, r, upd_select, vpack, has_newer_updates)) {
         /*
          * We should restore the update chains to the new disk image if there are newer updates in
          * eviction, or for cases that don't support history store, such as an in-memory database.

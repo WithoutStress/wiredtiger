@@ -22,6 +22,22 @@ static int __rec_write_err(WT_SESSION_IMPL *, WT_RECONCILE *, WT_PAGE *);
 static int __rec_write_wrapup(WT_SESSION_IMPL *, WT_RECONCILE *, WT_PAGE *);
 static int __reconcile(WT_SESSION_IMPL *, WT_REF *, WT_SALVAGE_COOKIE *, uint32_t, bool *);
 
+#ifdef VERSION_STORE
+static int
+__debug_page_depth(WT_REF *ref)
+{
+    int depth = 0;
+    WT_REF *p = ref;
+
+    while (!__wt_ref_is_root(p)) {
+        ++depth;
+        /* parent_ref is stored on the parent page of p */
+        p = p->home->pg_intl_parent_ref;
+    }
+    return depth; /* root depth == 0 */
+}
+#endif
+
 /*
  * __wt_reconcile --
  *     Reconcile an in-memory page into its on-disk format, and write it.
@@ -39,6 +55,16 @@ __wt_reconcile(WT_SESSION_IMPL *session, WT_REF *ref, WT_SALVAGE_COOKIE *salvage
     conn = S2C(session);
     page = ref->page;
 
+    /* Tony: print which file/page and page type we're reconciling. */
+#ifdef VERSION_STORE
+    printf("\n");
+    TONY_DEBUG("RECONCILE START (%s), page(%p) (%s) (%s%s) (%s) depth(%d)",
+        btree->dhandle->name, (void *)page, __wt_page_type_string(page->type),
+        LF_ISSET(WT_REC_EVICT) ? "evict" : "checkpoint",
+        LF_ISSET(WT_REC_HS) ? ", history store" : "",
+        __wt_page_is_modified(page) ? "modified" : "clean",
+        __debug_page_depth(ref));
+#endif
     session->reconcile_timeline.reconcile_start = __wt_clock(session);
 
     __wt_verbose(session, WT_VERB_RECONCILE, "%p reconcile %s (%s%s)", (void *)ref,
@@ -127,6 +153,9 @@ err:
         conn->rec_maximum_seconds = WT_CLOCKDIFF_SEC(session->reconcile_timeline.reconcile_finish,
           session->reconcile_timeline.reconcile_start);
 
+#ifdef VERSION_STORE
+    TONY_DEBUG("RECONCILE END\n");
+#endif
     return (ret);
 }
 
@@ -2722,14 +2751,23 @@ __rec_hs_wrapup(WT_SESSION_IMPL *session, WT_RECONCILE *r)
     WT_ERR(__wt_hs_delete_updates(session, r));
 
     /* Check if there's work to do. */
+    // Multi is like the split pages we wrote out during reconciliation.
+    // So if there are multiple "multi" it means there wa a split.
     for (multi = r->multi, i = 0; i < r->multi_next; ++multi, ++i)
         if (multi->supd != NULL)
             break;
+
     if (i == r->multi_next)
         return (0);
 
+    // The "supd" is the saved updates that should go into the history store.
+    // It's chained somewhere else
+    // We just focus on inserting in this part
+
     for (multi = r->multi, i = 0; i < r->multi_next; ++multi, ++i)
         if (multi->supd != NULL) {
+            // Maybe we could set another update chain which is targeted for version store..?
+            // Let's findout where the supd is chained
             WT_ERR(__wt_hs_insert_updates(session, r, multi));
             if (!multi->supd_restore) {
                 __wt_free(session, multi->supd);

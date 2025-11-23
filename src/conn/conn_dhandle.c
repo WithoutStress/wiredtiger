@@ -935,6 +935,10 @@ restart:
     /* Shut down the history store table after all eviction is complete. */
     __wt_hs_close(session);
 
+#ifdef VERSION_STORE
+    __wt_vs_close(session);
+#endif
+
     /*
      * Closing the files may have resulted in entries on our default session's list of open data
      * handles, specifically, we added the metadata file if any of the files were dirty. Clean up

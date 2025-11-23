@@ -231,6 +231,12 @@ __wt_connection_workers(WT_SESSION_IMPL *session, const char *cfg[])
      */
     WT_RET(__wt_hs_open(session, cfg));
 
+    // Tony: Create the version store file. This will only actually create it on a clean upgrade or when
+    // creating a new database.
+#ifdef VERSION_STORE
+    WT_RET(__wt_vs_open(session, cfg));
+#endif
+
     /*
      * Start the optional logging/removal threads. NOTE: The log manager must be started before
      * checkpoints so that the checkpoint server knows if logging is enabled. It must also be

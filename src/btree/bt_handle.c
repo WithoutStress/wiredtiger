@@ -420,6 +420,11 @@ __btree_conf(WT_SESSION_IMPL *session, WT_CKPT *ckpt, bool is_ckpt)
         F_CLR(btree, WT_BTREE_LOGGED);
     }
 
+    if (strcmp(session->dhandle->name, WT_VS_URI) == 0) {
+        F_SET(btree->dhandle, WT_DHANDLE_VS);
+        F_CLR(btree, WT_BTREE_LOGGED);
+    }
+
     WT_RET(__wt_config_gets(session, cfg, "tiered_object", &cval));
     if (cval.val)
         F_SET(btree, WT_BTREE_NO_CHECKPOINT);

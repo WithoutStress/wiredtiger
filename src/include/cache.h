@@ -55,6 +55,7 @@ typedef enum __wt_cache_op {
 } WT_CACHE_OP;
 
 #define WT_HS_FILE_MIN (100 * WT_MEGABYTE)
+#define WT_VS_FILE_MIN (100 * WT_MEGABYTE)
 
 /*
  * WiredTiger cache structure.
@@ -189,6 +190,8 @@ struct __wt_cache {
     uint32_t evict_empty_score;
 
     uint32_t hs_fileid; /* History store table file ID */
+
+    uint32_t vs_fileid; /* Version store table file ID */
 
     /*
      * The "history_activity" verbose messages are throttled to once per checkpoint. To accomplish

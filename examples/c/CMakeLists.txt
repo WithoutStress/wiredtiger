@@ -109,6 +109,13 @@ define_c_test(
 )
 
 define_c_test(
+    TARGET ex_history_store
+    SOURCES ex_history_store.c
+    DIR_NAME ex_history_store
+    ARGUMENTS -h $<SHELL_PATH:$<TARGET_FILE_DIR:ex_history_store>/WT_HOME>
+)
+
+define_c_test(
     TARGET ex_log
     SOURCES ex_log.c
     DIR_NAME ex_log

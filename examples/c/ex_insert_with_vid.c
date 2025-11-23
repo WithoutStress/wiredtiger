@@ -32,15 +32,13 @@
 
 static const char *home;
 
-#define VERSION_ITER 10000
-
 static void
-insert_u_with_vid_example(void) {
+insert_u_with_vid_example(int iteration) {
     WT_CONNECTION *conn;
     WT_CURSOR *cursor;
     WT_SESSION *session;
     WT_ITEM key, value;
-    int ret, i = 0;
+    int ret = 0;
 
     /* Open a connection to the database, creating it if necessary. */
     error_check(wiredtiger_open(home, NULL, "create,statistics=(all)", &conn));
@@ -61,37 +59,48 @@ insert_u_with_vid_example(void) {
     // error_check(session->begin_transaction(session, "isolation=snapshot"));
     // /*! [transaction example transaction begin] */
 
-    for(i = 0; i < VERSION_ITER; i++) {
-        char key_str[16] = {0, };
-        char value_str[16] = {0, };
-        char version_str[16] = {0, };
+    for (int i = 0; i < 100; i++) {
+        for (int j = 0; j < iteration; j++) {
+            char key_str[16] = {0, };
+            char value_str[16] = {0, };
+            char version_str[16] = {0, };
 
-        snprintf(key_str, sizeof(key_str), "key%d", 1);
-        key.data = key_str;
-        key.size = strlen(key_str);
+            snprintf(key_str, sizeof(key_str), "KEY%d", i);
+            key.data = key_str;
+            key.size = strlen(key_str);
 
-        snprintf(version_str, sizeof(version_str), "v%d", i);
-        key.vid = version_str;
-        key.vid_size = strlen(version_str);
+            snprintf(version_str, sizeof(version_str), "v%d", j);
+            key.vid = version_str;
+            key.vid_size = strlen(version_str);
 
-        snprintf(value_str, sizeof(value_str), "value%d", i);
-        value.data = value_str;
-        value.size = strlen(value_str);
+            snprintf(value_str, sizeof(value_str), "VALUE%d", j);
+            value.data = value_str;
+            value.size = strlen(value_str);
         
-        value.vid = version_str;
-        value.vid_size = strlen(version_str);
+            value.vid = version_str;
+            value.vid_size = strlen(version_str);
 
-        cursor->set_key_with_vid(cursor, &key);
-        cursor->set_value_with_vid(cursor, &value);
-        error_check(cursor->insert(cursor));
+            cursor->set_key_with_vid(cursor, &key);
+            cursor->set_value_with_vid(cursor, &value);
+            error_check(cursor->insert(cursor));
+        }
     }
 
-    cursor->set_key(cursor, &key);
-    error_check(cursor->remove(cursor));
+
+    // When we remove this..
+    // Even after we remove this key, we should be able to access it through Version Store.
+    // cursor->set_key(cursor, &key);
+    // error_check(cursor->remove(cursor));
 
     // /*! [transaction example transaction commit] */
     // error_check(session->commit_transaction(session, NULL));
     // /*! [transaction example transaction commit] */
+
+    printf("starting checkpoint\n");
+
+    error_check(session->checkpoint(session, NULL));
+
+    printf("done with checkpoint\n");
 
     /*! [transaction example cursor list] */
     error_check(cursor->reset(cursor)); /* Restart the scan. */
@@ -112,9 +121,16 @@ insert_u_with_vid_example(void) {
 int
 main(int argc, char *argv[])
 {
+    int iteration;
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <number of iterations>\n", argv[0]);
+        return (EXIT_FAILURE);
+    }
+
+    iteration = atoi(argv[1]);
     home = example_setup(argc, argv);
 
-    insert_u_with_vid_example();
+    insert_u_with_vid_example(iteration);
 
     return (EXIT_SUCCESS);
 }

@@ -9,6 +9,17 @@
 #ifndef __WT_INTERNAL_H
 #define __WT_INTERNAL_H
 
+#ifdef VERSION_STORE
+#define TONY_DEBUG(fmt, ...)                           \
+    do {                                               \
+        fprintf(stdout, "%-20s | " fmt "\n",         \
+               __func__, ##__VA_ARGS__);               \
+    } while (0)
+
+#else
+#define TONY_DEBUG(fmt, ...)
+#endif
+
 #if defined(__cplusplus)
 extern "C" {
 #endif

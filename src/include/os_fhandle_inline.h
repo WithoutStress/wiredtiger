@@ -115,6 +115,9 @@ __wt_read(WT_SESSION_IMPL *session, WT_FH *fh, wt_off_t offset, size_t len, void
 
     ret = fh->handle->fh_read(fh->handle, (WT_SESSION *)session, offset, len, buf);
 
+#ifdef VERSION_STORE
+    TONY_DEBUG("[READ] %s | Offset (%" PRIuMAX ") | Bytes (%zu)", fh->name, (uintmax_t)offset, len);
+#endif
     /* Flag any failed read: if we're in startup, it may be fatal. */
     if (ret != 0)
         F_SET(S2C(session), WT_CONN_DATA_CORRUPTION);
@@ -166,6 +169,9 @@ __wt_ftruncate(WT_SESSION_IMPL *session, WT_FH *fh, wt_off_t offset)
         WT_ASSERT(session, cur_size <= offset || S2C(session)->hot_backup_start == 0);
     }
 #endif
+#ifdef VERSION_STORE
+    TONY_DEBUG("[TRUNCATE] %s | Offset (%" PRIuMAX ")", fh->name, (uintmax_t)offset);
+#endif
     if (handle->fh_truncate != NULL)
         return (handle->fh_truncate(handle, (WT_SESSION *)session, offset));
     return (__wt_set_return(session, ENOTSUP));
@@ -200,6 +206,9 @@ __wt_write(WT_SESSION_IMPL *session, WT_FH *fh, wt_off_t offset, size_t len, con
     time_start = __wt_clock(session);
 
     ret = fh->handle->fh_write(fh->handle, (WT_SESSION *)session, offset, len, buf);
+#ifdef VERSION_STORE
+    TONY_DEBUG("[WRITE] %s | Offset (%" PRIuMAX ") | Bytes (%zu)", fh->name, (uintmax_t)offset, len);
+#endif
 
     time_stop = __wt_clock(session);
     __wt_stat_msecs_hist_incr_fswrite(session, WT_CLOCKDIFF_MS(time_stop, time_start));

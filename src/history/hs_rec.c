@@ -251,6 +251,40 @@ err:
 }
 
 /*
+ * __vs_insert_record --
+ *     A helper function to insert the record into the version store. The key layout matches the
+ *     history store: <btree id, user key, start_ts, counter>.
+ */
+#ifdef VERSION_STORE
+static int
+__vs_insert_record(WT_SESSION_IMPL *session, WT_CURSOR *cursor, WT_BTREE *btree, const WT_ITEM *key,
+  const uint8_t type, const WT_ITEM *vs_value, WT_TIME_WINDOW *tw)
+{
+    WT_DECL_RET;
+    WT_ITEM vid_item;
+
+    /* For now we only expect full standard updates to be written to the version store. */
+    WT_ASSERT(session, type == WT_UPDATE_STANDARD);
+    WT_ASSERT(session, vs_value->vid_size != 0);
+
+    TONY_DEBUG("Inserting Version Store record: btree id %" PRIu32 ", start ts %" PRIu64
+               ", VID %s",
+      btree->id, tw->start_ts, (char *)vs_value->vid);
+
+    /* Build a WT_ITEM for the VID so it can be part of the key. */
+    vid_item.data = vs_value->vid;
+    vid_item.size = vs_value->vid_size;
+
+    /* Version store key: <btree id, user key, start_ts, vid>. */
+    cursor->set_key(cursor, btree->id, key, tw->start_ts, &vid_item);
+    cursor->set_value(cursor, tw->durable_stop_ts, tw->durable_start_ts, (uint64_t)type, vs_value);
+    WT_RET(cursor->insert(cursor));
+
+    return (ret);
+}
+#endif
+
+/*
  * __hs_next_upd_full_value --
  *     Get the next update and its full value.
  */
@@ -281,7 +315,7 @@ __hs_next_upd_full_value(WT_SESSION_IMPL *session, WT_UPDATE_VECTOR *updates,
         WT_ASSERT(session, upd->type == WT_UPDATE_STANDARD);
         full_value->data = upd->data;
         full_value->size = upd->size;
-        if(upd->vid_size != 0) {
+        if (upd->vid_size != 0) {
             full_value->vid = (uint8_t *)upd->data + upd->size;
             full_value->vid_size = upd->vid_size;
         }
@@ -337,6 +371,10 @@ __wt_hs_insert_updates(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_MULTI *mult
 {
     WT_BTREE *btree, *hs_btree;
     WT_CURSOR *hs_cursor;
+#ifdef VERSION_STORE
+    WT_CURSOR *vs_cursor;
+    WT_SESSION_IMPL *vs_session;
+#endif
     WT_DECL_ITEM(full_value);
     WT_DECL_ITEM(key);
     WT_DECL_ITEM(modify_value);
@@ -360,6 +398,9 @@ __wt_hs_insert_updates(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_MULTI *mult
     bool enable_reverse_modify, error_on_ts_ordering, hs_inserted, squashed;
 
     r->cache_write_hs = false;
+#ifdef VERSION_STORE
+    vs_session = NULL;
+#endif
     btree = S2BT(session);
     prev_upd = NULL;
     WT_TIME_WINDOW_INIT(&tw);
@@ -369,6 +410,16 @@ __wt_hs_insert_updates(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_MULTI *mult
 
     WT_RET(__wt_curhs_open(session, NULL, &hs_cursor));
     F_SET(hs_cursor, WT_CURSTD_HS_READ_COMMITTED);
+
+#ifdef VERSION_STORE
+    /*
+     * Open a version store cursor using a separate internal session so that we don't mix history
+     * store cursors and other file cursors on the same session, which can break cache accounting.
+     */
+    WT_ERR(__wt_open_internal_session(
+      S2C(session), "vs_access_hs_rec", true, 0, 0, &vs_session));
+    WT_ERR(__wt_open_cursor(vs_session, WT_VS_URI, NULL, NULL, &vs_cursor));
+#endif
 
     __wt_update_vector_init(session, &updates);
 
@@ -456,6 +507,20 @@ __wt_hs_insert_updates(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_MULTI *mult
             if (upd->txnid == WT_TXN_ABORTED)
                 continue;
 
+            // Updates that are targeted to be inserted to history store
+            // TONY_DEBUG("===================== History Store Update =====================");
+            // TONY_DEBUG("Update data | %s", (char *)upd->data);
+            // TONY_DEBUG("Update size | %u", upd->size);
+            // TONY_DEBUG("Update txnid | %" PRIu64, upd->txnid);
+            // TONY_DEBUG("Update start_ts | %" PRIu64, upd->start_ts);
+            // TONY_DEBUG("Update durable_ts | %" PRIu64, upd->durable_ts);
+            // TONY_DEBUG("Update type | %s",
+            //   upd->type == WT_UPDATE_STANDARD    ? "WT_UPDATE_STANDARD" :
+            //     upd->type == WT_UPDATE_MODIFY    ? "WT_UPDATE_MODIFY" :
+            //     upd->type == WT_UPDATE_TOMBSTONE ? "WT_UPDATE_TOMBSTONE" :
+            //                                        "UNKNOWN");
+            // TONY_DEBUG("================================================================");
+
             /* We must have deleted any update left in the history store. */
             WT_ASSERT(session, !F_ISSET(upd, WT_UPDATE_TO_DELETE_FROM_HS));
 
@@ -510,7 +575,7 @@ __wt_hs_insert_updates(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_MULTI *mult
                         squashed = false;
                     }
                 } else if (upd != list->onpage_upd && upd->vid_size != 0)
-                    newest_hs = upd; 
+                    newest_hs = upd;
                 else if (upd != ref_upd)
                     squashed = true;
             }
@@ -589,7 +654,7 @@ __wt_hs_insert_updates(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_MULTI *mult
                 upd = prev_upd) {
             /* We should never insert the onpage value to the history store. */
             // WT_ASSERT(session, upd != list->onpage_upd);
-            if(upd == list->onpage_upd)
+            if (upd == list->onpage_upd)
                 break;
             WT_ASSERT(session, upd->type == WT_UPDATE_STANDARD || upd->type == WT_UPDATE_MODIFY);
             /* We should never insert prepared updates to the history store. */
@@ -717,9 +782,23 @@ __wt_hs_insert_updates(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_MULTI *mult
                 ++modify_cnt;
             } else {
                 modify_cnt = 0;
-                WT_ERR(__hs_insert_record(session, hs_cursor, btree, key, WT_UPDATE_STANDARD,
-                  full_value, &tw, error_on_ts_ordering));
-                ++cache_hs_insert_full_update;
+#ifdef VERSION_STORE
+                /*
+                 * When the value carries a VID, write it into the version store instead of the
+                 * history store. Otherwise, fall back to the normal history store path.
+                 */
+                if (full_value->vid_size != 0) {
+                    WT_ERR(
+                      __vs_insert_record(session, vs_cursor, btree, key, WT_UPDATE_STANDARD,
+                        full_value, &tw));
+                } else {
+#endif
+                    WT_ERR(__hs_insert_record(session, hs_cursor, btree, key, WT_UPDATE_STANDARD,
+                      full_value, &tw, error_on_ts_ordering));
+                    ++cache_hs_insert_full_update;
+#ifdef VERSION_STORE
+                }
+#endif
             }
 
             /* Flag the update as now in the history store. */
@@ -764,6 +843,13 @@ err:
     __wt_scr_free(session, &prev_full_value);
 
     WT_TRET(hs_cursor->close(hs_cursor));
+
+#ifdef VERSION_STORE
+    if (vs_cursor != NULL)
+        WT_TRET(vs_cursor->close(vs_cursor));
+    if (vs_session != NULL)
+        WT_TRET(__wt_session_close_internal(vs_session));
+#endif
 
     /* Update the statistics. */
     WT_STAT_CONN_DATA_INCRV(session, cache_hs_insert, insert_cnt);
