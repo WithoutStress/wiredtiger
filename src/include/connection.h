@@ -478,7 +478,8 @@ struct __wt_connection_impl {
 #define WT_CONN_LOG_RECOVER_ERR 0x080u     /* Error if recovery required */
 #define WT_CONN_LOG_RECOVER_FAILED 0x100u  /* Recovery failed */
 #define WT_CONN_LOG_REMOVE 0x200u          /* Removal is enabled */
-#define WT_CONN_LOG_ZERO_FILL 0x400u       /* Manually zero files */
+#define WT_CONN_LOG_VERSION_STORE 0x400u   /* Version store is enabled */
+#define WT_CONN_LOG_ZERO_FILL 0x800u       /* Manually zero files */
                                            /* AUTOMATIC FLAG VALUE GENERATION STOP 32 */
     uint32_t log_flags;                    /* Global logging configuration */
     WT_CONDVAR *log_cond;                  /* Log server wait mutex */

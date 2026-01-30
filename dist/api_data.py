@@ -902,6 +902,10 @@ log_configuration_common = [
     Config('remove', 'true', r'''
         automatically remove unneeded log files''',
         type='boolean'),
+    Config('version_store', 'false', r'''
+        enable version store for log files. When enabled, log files containing records written
+        by certain versions will be renamed and preserved instead of being removed''',
+        type='boolean'),
     Config('zero_fill', 'false', r'''
         manually write zeroes into log files''',
         type='boolean')

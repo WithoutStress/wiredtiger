@@ -278,6 +278,15 @@ __wt_logmgr_config(WT_SESSION_IMPL *session, const char **cfg, bool reconfig)
     if (cval.val != 0)
         FLD_SET(conn->log_flags, WT_CONN_LOG_REMOVE);
 
+    WT_RET(__wt_config_gets(session, cfg, "log.version_store", &cval));
+    if (cval.val != 0) {
+        if (FLD_ISSET(conn->log_flags, WT_CONN_LOG_REMOVE))
+            WT_RET_MSG(session, EINVAL,
+              "version_store cannot be enabled when log removal is enabled. "
+              "Set log=(remove=false,version_store=true)");
+        FLD_SET(conn->log_flags, WT_CONN_LOG_VERSION_STORE);
+    }
+
     /*
      * The file size cannot be reconfigured. The amount of memory allocated to the log slots may be
      * based on the log file size at creation and we don't want to re-allocate that memory while
@@ -448,6 +457,101 @@ __log_remove_once(WT_SESSION_IMPL *session, uint32_t backup_file)
     if (0)
 err:
         __wt_err(session, ret, "log removal server error");
+    WT_TRET(__wt_fs_directory_list_free(session, &logfiles, logcount));
+    return (ret);
+}
+
+/*
+ * __log_rename_to_vstore_int --
+ *     Helper for __log_rename_to_version_store. Renames log files to version store format.
+ */
+static int
+__log_rename_to_vstore_int(
+  WT_SESSION_IMPL *session, char **logfiles, u_int logcount, uint32_t min_lognum)
+{
+    WT_DECL_ITEM(from_path);
+    WT_DECL_ITEM(to_path);
+    WT_DECL_RET;
+    uint32_t lognum;
+    u_int i;
+
+    WT_RET(__wt_scr_alloc(session, 0, &from_path));
+    WT_ERR(__wt_scr_alloc(session, 0, &to_path));
+
+    for (i = 0; i < logcount; i++) {
+        /* Skip files that are already renamed to .vstore */
+        if (strstr(logfiles[i], ".vstore") != NULL)
+            continue;
+
+        WT_ERR(__wt_log_extract_lognum(session, logfiles[i], &lognum));
+        if (lognum < min_lognum) {
+            /* Build the source path (e.g., "journal/WiredTigerLog.0000000001") */
+            WT_ERR(__wt_log_filename(session, lognum, WT_LOG_FILENAME, from_path));
+
+            /* Build the destination path with .vstore suffix */
+            WT_ERR(__wt_buf_fmt(session, to_path, "%s.vstore", (const char *)from_path->data));
+
+            __wt_verbose(session, WT_VERB_LOG,
+              "log_version_store: rename %s to %s",
+              (const char *)from_path->data, (const char *)to_path->data);
+
+            WT_ERR(__wt_fs_rename(session, from_path->data, to_path->data, false));
+        }
+    }
+
+err:
+    __wt_scr_free(session, &from_path);
+    __wt_scr_free(session, &to_path);
+    return (ret);
+}
+
+/*
+ * __log_rename_to_version_store --
+ *     Rename old log files to version store format (.vstore) instead of removing them.
+ *     Must be called with the log removal lock held.
+ */
+static int
+__log_rename_to_version_store(WT_SESSION_IMPL *session)
+{
+    WT_CONNECTION_IMPL *conn;
+    WT_DECL_RET;
+    WT_LOG *log;
+    uint32_t min_lognum;
+    u_int logcount;
+    char **logfiles;
+
+    conn = S2C(session);
+    log = conn->log;
+    logcount = 0;
+    logfiles = NULL;
+
+    /*
+     * We want the minimum of the last log file written to disk and the checkpoint LSN.
+     * Log files before this can be safely renamed to version store.
+     * Checkpointed/Synced log files are safe to rename to version store.
+     */
+    min_lognum = WT_MIN(log->ckpt_lsn.l.file, log->sync_lsn.l.file);
+
+    __wt_verbose(session, WT_VERB_LOG,
+      "log_version_store: rename to version store up to log number %" PRIu32, min_lognum);
+
+    /*
+     * Get the list of all log files and rename any earlier than the minimum log number.
+     */
+    WT_ERR(__wt_fs_directory_list(session, conn->log_path, WT_LOG_FILENAME, &logfiles, &logcount));
+
+    WT_WITH_HOTBACKUP_READ_LOCK(
+      session, ret = __log_rename_to_vstore_int(session, logfiles, logcount, min_lognum), NULL);
+    WT_ERR(ret);
+
+    /*
+     * Update the first LSN to reflect the renamed files.
+     */
+    WT_SET_LSN(&log->first_lsn, min_lognum, 0);
+
+    if (0)
+err:
+        __wt_err(session, ret, "log version store server error");
     WT_TRET(__wt_fs_directory_list_free(session, &logfiles, logcount));
     return (ret);
 }
@@ -898,7 +1002,8 @@ __log_server(void *arg)
             }
 
             /*
-             * Perform the removal.
+             * Perform the removal or version store handling.
+             * Note: version_store can only be enabled when remove is disabled (validated at open).
              */
             if (FLD_ISSET(conn->log_flags, WT_CONN_LOG_REMOVE)) {
                 if (__wt_try_writelock(session, &log->log_remove_lock) == 0) {
@@ -908,6 +1013,22 @@ __log_server(void *arg)
                 } else
                     __wt_verbose(session, WT_VERB_LOG, "%s",
                       "log_remove: Blocked due to open log cursor holding remove lock");
+            } else if (FLD_ISSET(conn->log_flags, WT_CONN_LOG_VERSION_STORE)) {
+                /*
+                 * Version store is enabled. Rename old log files to .vstore format
+                 * instead of removing them.
+                 * TODO: kyu-jin: Add cur_blue record scanning logic before renaming.
+                 *       Versioned KV pairs in update records are not handled yet.
+                 *       They should not be stored in orignal .wt files.
+                 *       Removal of versioned KV pairs should be actually performed when lifecycle server is running.
+                 */
+                if (__wt_try_writelock(session, &log->log_remove_lock) == 0) {
+                    ret = __log_rename_to_version_store(session);
+                    __wt_writeunlock(session, &log->log_remove_lock);
+                    WT_ERR(ret);
+                } else
+                    __wt_verbose(session, WT_VERB_LOG, "%s",
+                      "log_version_store: Blocked due to open log cursor holding remove lock");
             }
             time_start = __wt_clock(session);
         }
