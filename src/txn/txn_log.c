@@ -95,7 +95,17 @@ __txn_op_log(
                   __wt_logop_row_put_pack(session, logrec, fileid, &cursor->key, &cursor->value));
             break;
         case WT_UPDATE_STANDARD:
-            WT_RET(__wt_logop_row_put_pack(session, logrec, fileid, &cursor->key, &value));
+            /*
+             * kyu-jin: Since versioned write does always write the full value, we can always log the full
+             * value here.
+             */
+            if (upd->vid_size > 0) {
+                value.vid = upd->data + upd->size;
+                value.vid_size = upd->vid_size;
+                WT_RET(__wt_logop_row_put_pack_with_vid(session, logrec, fileid, &cursor->key, &value));
+            } else {
+                WT_RET(__wt_logop_row_put_pack(session, logrec, fileid, &cursor->key, &value));
+            }
             break;
         case WT_UPDATE_TOMBSTONE:
             WT_RET(__wt_logop_row_remove_pack(session, logrec, fileid, &cursor->key));

@@ -425,6 +425,33 @@ __wt_logop_row_put_pack(
 }
 
 int
+__wt_logop_row_put_pack_with_vid(
+  WT_SESSION_IMPL *session, WT_ITEM *logrec, uint32_t fileid, WT_ITEM *key, WT_ITEM *value)
+{
+    const char *fmt = WT_UNCHECKED_STRING(IIIuuu);
+    WT_ITEM vid;
+    size_t size;
+    uint32_t optype, recsize;
+
+    optype = WT_LOGOP_ROW_PUT_VID;
+
+    /* Extract vid from value */
+    vid.data = value->vid;
+    vid.size = value->vid_size;
+
+    WT_RET(__wt_struct_size(session, &size, fmt, optype, 0, fileid, key, value, &vid));
+
+    __wt_struct_size_adjust(session, &size);
+    WT_RET(__wt_buf_extend(session, logrec, logrec->size + size));
+    recsize = (uint32_t)size;
+    WT_RET(__wt_struct_pack(session, (uint8_t *)logrec->data + logrec->size, size, fmt, optype,
+      recsize, fileid, key, value, &vid));
+
+    logrec->size += (uint32_t)size;
+    return (0);
+}
+
+int
 __wt_logop_row_put_unpack(WT_SESSION_IMPL *session, const uint8_t **pp, const uint8_t *end,
   uint32_t *fileidp, WT_ITEM *keyp, WT_ITEM *valuep)
 {
@@ -436,6 +463,30 @@ __wt_logop_row_put_unpack(WT_SESSION_IMPL *session, const uint8_t **pp, const ui
            session, *pp, WT_PTRDIFF(end, *pp), fmt, &optype, &size, fileidp, keyp, valuep)) != 0)
         WT_RET_MSG(session, ret, "logop_row_put: unpack failure");
     WT_ASSERT(session, optype == WT_LOGOP_ROW_PUT);
+
+    *pp += size;
+    return (0);
+}
+
+int
+__wt_logop_row_put_unpack_with_vid(WT_SESSION_IMPL *session, const uint8_t **pp, const uint8_t *end,
+  uint32_t *fileidp, WT_ITEM *keyp, WT_ITEM *valuep)
+{
+    WT_DECL_RET;
+    WT_ITEM vid;
+    const char *fmt = WT_UNCHECKED_STRING(IIIuuu);
+    uint32_t optype, size;
+
+    if ((ret = __wt_struct_unpack(
+           session, *pp, WT_PTRDIFF(end, *pp), fmt, &optype, &size, fileidp, keyp, valuep, &vid)) != 0)
+        WT_RET_MSG(session, ret, "logop_row_put_with_vid: unpack failure");
+    WT_ASSERT(session, optype == WT_LOGOP_ROW_PUT_VID);
+
+    /* Store vid in valuep for consistency with pack function */
+    keyp->vid = vid.data;
+    keyp->vid_size = vid.size;
+    valuep->vid = vid.data;
+    valuep->vid_size = vid.size;
 
     *pp += size;
     return (0);

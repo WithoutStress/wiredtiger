@@ -6,6 +6,7 @@
  * See the file LICENSE for redistribution information.
  */
 
+#include "wiredtiger.h"
 #include "wt_internal.h"
 
 /* Enable all recovery-related verbose messaging events. */
@@ -306,6 +307,7 @@ __txn_op_apply(WT_RECOVERY *r, WT_LSN *lsnp, const uint8_t **pp, const uint8_t *
             WT_TRET(stop->close(stop));
         WT_ERR(ret);
         break;
+
     case WT_LOGOP_TXN_TIMESTAMP:
         /*
          * Timestamp records are informational only. We have to unpack it to properly move forward
@@ -314,6 +316,16 @@ __txn_op_apply(WT_RECOVERY *r, WT_LSN *lsnp, const uint8_t **pp, const uint8_t *
         WT_ERR(__wt_logop_txn_timestamp_unpack(
           session, pp, end, &t_sec, &t_nsec, &commit, &durable, &first_commit, &prepare, &read));
         break;
+
+    case WT_LOGOP_ROW_PUT_VID:
+        /* TODO: kyu-jin: implement recovery process considering version_id */
+        WT_ERR(__wt_logop_row_put_unpack_with_vid(session, pp, end, &fileid, &key, &value));
+        GET_RECOVERY_CURSOR(session, r, lsnp, fileid, &cursor);
+        __wt_cursor_set_raw_key(cursor, &key);
+        __wt_cursor_set_raw_value(cursor, &value);
+        WT_ERR(cursor->insert(cursor));
+        break;
+
     default:
         WT_ERR(__wt_illegal_value(session, optype));
     }

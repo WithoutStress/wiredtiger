@@ -213,9 +213,9 @@ __hs_insert_record(WT_SESSION_IMPL *session, WT_CURSOR *cursor, WT_BTREE *btree,
         error_on_ts_ordering = false;
     }
 
-    if (ret == 0 && hs_value->vid_size == 0)
-        WT_ERR(__hs_delete_reinsert_from_pos(session, cursor, btree->id, key, tw->start_ts + 1,
-          true, false, error_on_ts_ordering, &counter, tw));
+    // if (ret == 0 && hs_value->vid_size == 0)
+    WT_ERR(__hs_delete_reinsert_from_pos(session, cursor, btree->id, key, tw->start_ts + 1,
+      true, false, error_on_ts_ordering, &counter, tw));
 
 #ifdef HAVE_DIAGNOSTIC
     /*
@@ -233,11 +233,12 @@ __hs_insert_record(WT_SESSION_IMPL *session, WT_CURSOR *cursor, WT_BTREE *btree,
 
     /* Insert the new record now. */
     cursor->set_key(cursor, 4, btree->id, key, tw->start_ts, counter);
-    if(hs_value->vid_size != 0)
-        cursor->set_value_with_vid(cursor, tw, tw->durable_stop_ts, tw->durable_start_ts, (uint64_t)type, hs_value);
-    else {
-        cursor->set_value(cursor, tw, tw->durable_stop_ts, tw->durable_start_ts, (uint64_t)type, hs_value);
-    }
+    // if(hs_value->vid_size != 0)
+    //     cursor->set_value_with_vid(cursor, tw, tw->durable_stop_ts, tw->durable_start_ts, (uint64_t)type, hs_value);
+    // else {
+    //     cursor->set_value(cursor, tw, tw->durable_stop_ts, tw->durable_start_ts, (uint64_t)type, hs_value);
+    // }
+    cursor->set_value(cursor, tw, tw->durable_stop_ts, tw->durable_start_ts, (uint64_t)type, hs_value);
     WT_ERR(cursor->insert(cursor));
 
 err:
@@ -281,10 +282,10 @@ __hs_next_upd_full_value(WT_SESSION_IMPL *session, WT_UPDATE_VECTOR *updates,
         WT_ASSERT(session, upd->type == WT_UPDATE_STANDARD);
         full_value->data = upd->data;
         full_value->size = upd->size;
-        if(upd->vid_size != 0) {
-            full_value->vid = (uint8_t *)upd->data + upd->size;
-            full_value->vid_size = upd->vid_size;
-        }
+        // if(upd->vid_size != 0) {
+        //     full_value->vid = (uint8_t *)upd->data + upd->size;
+        //     full_value->vid_size = upd->vid_size;
+        // }
     }
 
     *updp = upd;
@@ -509,8 +510,9 @@ __wt_hs_insert_updates(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_MULTI *mult
                         ++cache_hs_write_squash;
                         squashed = false;
                     }
-                } else if (upd != list->onpage_upd && upd->vid_size != 0)
-                    newest_hs = upd; 
+                } 
+                // else if (upd != list->onpage_upd && upd->vid_size != 0)
+                //     newest_hs = upd; 
                 else if (upd != ref_upd)
                     squashed = true;
             }
@@ -518,21 +520,21 @@ __wt_hs_insert_updates(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_MULTI *mult
             prev_upd = upd;
 
             // TODO: kyu-jin: This kind of implementation cannot support turn on/off the S3 bucket dynamically
-            if (upd->vid_size == 0) {
-                /*
-                * No need to continue if we found a first self contained value that is globally
-                * visible.
-                */
-                if (__wt_txn_upd_visible_all(session, upd) && WT_UPDATE_DATA_VALUE(upd))
-                    break;
+            //if (upd->vid_size == 0) {
+            /*
+            * No need to continue if we found a first self contained value that is globally
+            * visible.
+            */
+            if (__wt_txn_upd_visible_all(session, upd) && WT_UPDATE_DATA_VALUE(upd))
+                break;
 
-                /*
-                * If we've reached a full update and it's in the history store we don't need to
-                * continue as anything beyond this point won't help with calculating deltas.
-                */
-                if (upd->type == WT_UPDATE_STANDARD && F_ISSET(upd, WT_UPDATE_HS))
-                    break;
-            }
+            /*
+            * If we've reached a full update and it's in the history store we don't need to
+            * continue as anything beyond this point won't help with calculating deltas.
+            */
+            if (upd->type == WT_UPDATE_STANDARD && F_ISSET(upd, WT_UPDATE_HS))
+                break;
+            //}
 
             /*
              * Save the first update without a timestamp in the update chain. This is used to remove

@@ -469,40 +469,49 @@ static int
 __log_rename_to_vstore_int(
   WT_SESSION_IMPL *session, char **logfiles, u_int logcount, uint32_t min_lognum)
 {
-    WT_DECL_ITEM(from_path);
-    WT_DECL_ITEM(to_path);
+    WT_CONNECTION_IMPL *conn;
     WT_DECL_RET;
     uint32_t lognum;
     u_int i;
 
-    WT_RET(__wt_scr_alloc(session, 0, &from_path));
-    WT_ERR(__wt_scr_alloc(session, 0, &to_path));
+    conn = S2C(session);
 
     for (i = 0; i < logcount; i++) {
-        /* Skip files that are already renamed to .vstore */
-        if (strstr(logfiles[i], ".vstore") != NULL)
+        WT_DECL_ITEM(from_path);
+        WT_DECL_ITEM(to_path);
+
+        /* Skip files that are already renamed to version store format */
+        if (strstr(logfiles[i], "WiredTigerVS.") != NULL)
             continue;
 
-        WT_ERR(__wt_log_extract_lognum(session, logfiles[i], &lognum));
+        WT_RET(__wt_log_extract_lognum(session, logfiles[i], &lognum));
         if (lognum < min_lognum) {
+            WT_RET(__wt_scr_alloc(session, 0, &from_path));
+            WT_ERR(__wt_scr_alloc(session, 0, &to_path));
+
             /* Build the source path (e.g., "journal/WiredTigerLog.0000000001") */
             WT_ERR(__wt_log_filename(session, lognum, WT_LOG_FILENAME, from_path));
 
-            /* Build the destination path with .vstore suffix */
-            WT_ERR(__wt_buf_fmt(session, to_path, "%s.vstore", (const char *)from_path->data));
+            /* Build the destination path with WiredTigerVS prefix */
+            WT_ERR(__wt_buf_fmt(session, to_path, "%s%sWiredTigerVS.%010" PRIu32,
+              conn->log_path != NULL ? conn->log_path : "",
+              conn->log_path != NULL ? "/" : "",
+              lognum));
 
             __wt_verbose(session, WT_VERB_LOG,
               "log_version_store: rename %s to %s",
               (const char *)from_path->data, (const char *)to_path->data);
 
             WT_ERR(__wt_fs_rename(session, from_path->data, to_path->data, false));
+
+err:
+            __wt_scr_free(session, &from_path);
+            __wt_scr_free(session, &to_path);
+            WT_RET(ret);
         }
     }
 
-err:
-    __wt_scr_free(session, &from_path);
-    __wt_scr_free(session, &to_path);
-    return (ret);
+    return (0);
 }
 
 /*

@@ -936,7 +936,8 @@ __wt_rec_upd_select(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_INSERT *ins, W
      *
      * Additionally history store reconciliation is not set skip saving an update.
      */
-    if (__rec_need_save_upd(session, r, upd_select, vpack, has_newer_updates) || (upd_select->upd && upd_select->upd->vid_size != 0)) {
+    // if (__rec_need_save_upd(session, r, upd_select, vpack, has_newer_updates) || (upd_select->upd && upd_select->upd->vid_size != 0)) {
+    if (__rec_need_save_upd(session, r, upd_select, vpack, has_newer_updates)) {
         /*
          * We should restore the update chains to the new disk image if there are newer updates in
          * eviction, or for cases that don't support history store, such as an in-memory database.
