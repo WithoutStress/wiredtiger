@@ -381,6 +381,12 @@ struct __wt_verify_info;
 typedef struct __wt_verify_info WT_VERIFY_INFO;
 struct __wt_version;
 typedef struct __wt_version WT_VERSION;
+struct __wt_vs_btree_range;
+typedef struct __wt_vs_btree_range WT_VS_BTREE_RANGE;
+struct __wt_vs_key_range;
+typedef struct __wt_vs_key_range WT_VS_KEY_RANGE;
+struct __wt_vs_range;
+typedef struct __wt_vs_range WT_VS_RANGE;
 union __wt_lsn;
 typedef union __wt_lsn WT_LSN;
 union __wt_rand_state;
@@ -455,6 +461,7 @@ typedef uint64_t wt_timestamp_t;
 #include "tiered.h"
 #include "txn.h"
 #include "verbose.h"
+#include "vs.h"
 
 #include "session.h" /* required by connection.h */
 #include "version.h" /* required by connection.h */

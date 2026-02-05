@@ -2471,8 +2471,12 @@ struct __wt_connection {
 	 * version store for log files.  When enabled\, log files containing records written by
 	 * certain versions will be renamed and preserved instead of being removed., a boolean flag;
 	 * default \c false.}
-	 * @config{&nbsp;&nbsp;&nbsp;&nbsp;zero_fill, manually write zeroes into
-	 * log files., a boolean flag; default \c false.}
+	 * @config{&nbsp;&nbsp;&nbsp;&nbsp;version_store_compact_threshold,
+	 * number of WiredTigerVS files that triggers compaction into per-leaf version store files.
+	 * Set to 1 for immediate compaction when each VS file is created.  Set to 0 to disable
+	 * automatic compaction., an integer between \c 0 and \c 1000; default \c 4.}
+	 * @config{&nbsp;&nbsp;&nbsp;&nbsp;zero_fill, manually write zeroes into log files., a
+	 * boolean flag; default \c false.}
 	 * @config{ ),,}
 	 * @config{lsm_manager = (, configure database wide options for LSM tree management.  The
 	 * LSM manager is started automatically the first time an LSM tree is opened.  The LSM
@@ -3280,8 +3284,12 @@ struct __wt_connection {
  * version_store, enable version store for log files.  When enabled\, log files containing records
  * written by certain versions will be renamed and preserved instead of being removed., a boolean
  * flag; default \c false.}
- * @config{&nbsp;&nbsp;&nbsp;&nbsp;zero_fill, manually write zeroes into
- * log files., a boolean flag; default \c false.}
+ * @config{&nbsp;&nbsp;&nbsp;&nbsp;version_store_compact_threshold, number
+ * of WiredTigerVS files that triggers compaction into per-leaf version store files.  Set to 1 for
+ * immediate compaction when each VS file is created.  Set to 0 to disable automatic compaction., an
+ * integer between \c 0 and \c 1000; default \c 4.}
+ * @config{&nbsp;&nbsp;&nbsp;&nbsp;zero_fill,
+ * manually write zeroes into log files., a boolean flag; default \c false.}
  * @config{ ),,}
  * @config{lsm_manager = (, configure database wide options for LSM tree management.  The LSM
  * manager is started automatically the first time an LSM tree is opened.  The LSM manager uses a

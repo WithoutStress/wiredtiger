@@ -287,6 +287,9 @@ __wt_logmgr_config(WT_SESSION_IMPL *session, const char **cfg, bool reconfig)
         FLD_SET(conn->log_flags, WT_CONN_LOG_VERSION_STORE);
     }
 
+    WT_RET(__wt_config_gets(session, cfg, "log.version_store_compact_threshold", &cval));
+    conn->vs_compact_threshold = (uint32_t)cval.val;
+
     /*
      * The file size cannot be reconfigured. The amount of memory allocated to the log slots may be
      * based on the log file size at creation and we don't want to re-allocate that memory while
@@ -1182,6 +1185,13 @@ __wt_logmgr_open(WT_SESSION_IMPL *session)
         conn->log_tid_set = true;
     }
 
+    /* Initialize version store metadata if version_store is enabled */
+    if (FLD_ISSET(conn->log_flags, WT_CONN_LOG_VERSION_STORE)) {
+        WT_RET(__wt_vs_range_init(session, &conn->vs_range));
+        /* Try to load existing metadata, ignore if not found */
+        WT_RET_NOTFOUND_OK(__wt_vs_range_load(session, conn->vs_range));
+    }
+
     return (0);
 }
 
@@ -1255,5 +1265,12 @@ __wt_logmgr_destroy(WT_SESSION_IMPL *session)
     __wt_spin_destroy(session, &conn->log->log_writelsn_lock);
     __wt_free(session, conn->log_path);
     __wt_free(session, conn->log);
+
+    /* Destroy version store metadata if it was initialized */
+    if (conn->vs_range != NULL) {
+        WT_TRET(__wt_vs_range_destroy(session, conn->vs_range));
+        conn->vs_range = NULL;
+    }
+
     return (ret);
 }

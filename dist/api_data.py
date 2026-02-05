@@ -906,6 +906,11 @@ log_configuration_common = [
         enable version store for log files. When enabled, log files containing records written
         by certain versions will be renamed and preserved instead of being removed''',
         type='boolean'),
+    Config('version_store_compact_threshold', '4', r'''
+        number of WiredTigerVS files that triggers compaction into per-leaf version store files.
+        Set to 1 for immediate compaction when each VS file is created.
+        Set to 0 to disable automatic compaction''',
+        min='0', max='1000'),
     Config('zero_fill', 'false', r'''
         manually write zeroes into log files''',
         type='boolean')

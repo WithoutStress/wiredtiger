@@ -232,3 +232,4 @@ src/txn/txn_ckpt.c
 src/txn/txn_log.c
 src/txn/txn_recover.c
 src/txn/txn_timestamp.c
+src/vs/vs_range.c

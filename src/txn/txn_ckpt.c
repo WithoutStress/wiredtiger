@@ -1304,6 +1304,27 @@ __txn_checkpoint(WT_SESSION_IMPL *session, const char *cfg[])
             conn->txn_global.last_ckpt_timestamp = WT_TS_NONE;
     }
 
+    /* Collect key ranges and save version store metadata after successful checkpoint */
+    if (full && conn->vs_range != NULL) {
+        WT_DATA_HANDLE *dhandle;
+
+        /* Walk all data handles and collect key ranges for row-store btrees */
+        TAILQ_FOREACH (dhandle, &conn->dhqh, q) {
+            if (!F_ISSET(dhandle, WT_DHANDLE_OPEN) || !WT_DHANDLE_BTREE(dhandle))
+                continue;
+            /* Only process blue: btrees */
+            if (strncmp(dhandle->name, "blue:", 5) != 0)
+                continue;
+
+            WT_WITH_DHANDLE(session, dhandle,
+                ret = __wt_vs_range_collect_btree_ranges(session, conn->vs_range));
+            WT_TRET(ret);
+        }
+
+        conn->vs_range->checkpoint_gen++;
+        WT_TRET(__wt_vs_range_save(session, conn->vs_range));
+    }
+
 err:
     /*
      * Reset the timer so that next checkpoint tracks the progress only if configured.
