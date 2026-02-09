@@ -1695,6 +1695,7 @@ __wt_clsm_open(WT_SESSION_IMPL *session, const char *uri, WT_CURSOR *owner, cons
       __clsm_prev,                                    /* prev */
       __clsm_reset,                                   /* reset */
       __clsm_search,                                  /* search */
+      __wt_cursor_search_with_vid_notsup,             /* search-with-vid */
       __clsm_search_near,                             /* search-near */
       __clsm_insert,                                  /* insert */
       __wt_cursor_modify_value_format_notsup,         /* modify */

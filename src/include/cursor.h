@@ -14,17 +14,17 @@
  */
 #define WT_CURSOR_STATIC_INIT(n, get_key, get_value, get_key_with_vid, get_value_with_vid,       \
   get_raw_key_value, set_key, set_value, set_key_with_vid, set_value_with_vid,                   \
-  compare, equals, next, prev, reset, search, search_near, insert, modify, update, remove,       \
-  reserve, reconfigure, largest_key, bound, cache, reopen, checkpoint_id, close)                 \
+  compare, equals, next, prev, reset, search, search_with_vid, search_near, insert, modify,      \
+  update, remove, reserve, reconfigure, largest_key, bound, cache, reopen, checkpoint_id, close) \
     static const WT_CURSOR n = {                                                                 \
       NULL, /* session */                                                                        \
       NULL, /* uri */                                                                            \
       NULL, /* key_format */                                                                     \
       NULL, /* value_format */                                                                   \
       get_key, get_value, get_key_with_vid, get_value_with_vid, get_raw_key_value,               \
-      set_key, set_value, set_key_with_vid, set_value_with_vid, compare, equals, next, prev,      \
-      reset, search, search_near, insert, modify, update, remove, reserve, checkpoint_id, close, \
-      largest_key, reconfigure, bound, cache, reopen, 0, /* uri_hash */                          \
+      set_key, set_value, set_key_with_vid, set_value_with_vid, compare, equals, next, prev,     \
+      reset, search, search_with_vid, search_near, insert, modify, update, remove, reserve,      \
+      checkpoint_id, close, largest_key, reconfigure, bound, cache, reopen, 0, /* uri_hash */    \
       {NULL, NULL},                                      /* TAILQ_ENTRY q */                     \
       0,                                                 /* recno key */                         \
       {0},                                               /* recno raw buffer */                  \

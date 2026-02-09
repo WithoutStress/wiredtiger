@@ -2587,8 +2587,11 @@ __rec_write_wrapup(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_PAGE *page)
     default: /* Page split */
         if (WT_PAGE_IS_INTERNAL(page))
             WT_STAT_DATA_INCR(session, rec_multiblock_internal);
-        else
+        else {
             WT_STAT_DATA_INCR(session, rec_multiblock_leaf);
+            /* Update vs_range for blue: btrees when leaf page splits */
+            WT_RET(__wt_vs_range_update_on_split(session, r));
+        }
 
         /* Optionally display the actual split keys in verbose mode. */
         if (WT_VERBOSE_LEVEL_ISSET(session, WT_VERB_SPLIT, WT_VERBOSE_DEBUG_2))

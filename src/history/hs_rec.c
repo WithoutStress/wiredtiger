@@ -590,9 +590,9 @@ __wt_hs_insert_updates(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_MULTI *mult
         for (;; tmp = full_value, full_value = prev_full_value, prev_full_value = tmp,
                 upd = prev_upd) {
             /* We should never insert the onpage value to the history store. */
-            // WT_ASSERT(session, upd != list->onpage_upd);
-            if(upd == list->onpage_upd)
-                break;
+            WT_ASSERT(session, upd != list->onpage_upd);
+            //if(upd == list->onpage_upd)
+            //    break;
             WT_ASSERT(session, upd->type == WT_UPDATE_STANDARD || upd->type == WT_UPDATE_MODIFY);
             /* We should never insert prepared updates to the history store. */
             WT_ASSERT(session, upd->prepare_state != WT_PREPARE_INPROGRESS);
@@ -660,7 +660,8 @@ __wt_hs_insert_updates(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_MULTI *mult
 
             /* Squash the updates from the same transaction. */
             // TODO: kyu-jin: This kind of implementation cannot support turn on/off the S3 bucket dynamically
-            if (upd->vid_size == 0 && upd->start_ts == prev_upd->start_ts && upd->txnid == prev_upd->txnid) {
+            // if (upd->vid_size == 0 && upd->start_ts == prev_upd->start_ts && upd->txnid == prev_upd->txnid) {
+            if (upd->start_ts == prev_upd->start_ts && upd->txnid == prev_upd->txnid) {
                 squashed = true;
                 continue;
             }
@@ -947,12 +948,11 @@ __hs_delete_reinsert_from_pos(WT_SESSION_IMPL *session, WT_CURSOR *hs_cursor, ui
      * cannot modify the history store to fix the update's timestamps as it may make the history
      * store checkpoint inconsistent.
      */
-    // TODO: kyu-jin: current implementation loses the functionality of History Store with error_on_ts_ordering
-    // if (error_on_ts_ordering) {
-    //     ret = EBUSY;
-    //     WT_STAT_CONN_INCR(session, cache_eviction_fail_checkpoint_no_ts);
-    //     goto err;
-    // }
+    if (error_on_ts_ordering) {
+        ret = EBUSY;
+        WT_STAT_CONN_INCR(session, cache_eviction_fail_checkpoint_no_ts);
+        goto err;
+    }
 
     /*
      * The goal of this function is to move no timestamp content to maintain ordering in the

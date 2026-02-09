@@ -13,16 +13,23 @@
  *
  * This module manages:
  * - Key range metadata for mapping keys to leaf pages
- * - Per-leaf VS files (SSTable-like structure)
- * - Compaction of WiredTigerVS log files into per-leaf VS files
+ * - Per-leaf LeafVS files (SSTable-like structure)
+ * - Compaction of WiredTigerPrepVS log files into per-leaf LeafVS files
+ *
+ * Terminology:
+ * - PrepVS (Preparatory VS): Log-structured temp files (WiredTigerPrepVS.*)
+ * - LeafVS: Per-leaf page version files (LeafVS_<btree_id>_<page_id>.vs)
  */
 
 /* VS key range file name */
 #define WT_VS_RANGE_FILE "WiredTiger.vs_range"
 
-/* Per-leaf VS file prefix */
-#define WT_VS_LEAF_PREFIX "LeafVS_"
-#define WT_VS_LEAF_SUFFIX ".vs"
+/* PrepVS (preparatory VS) file prefix - log-structured temp files */
+#define WT_PREPVS_PREFIX "WiredTigerPrepVS."
+
+/* LeafVS (per-leaf VS) file prefix and suffix */
+#define WT_LEAFVS_PREFIX "LeafVS_"
+#define WT_LEAFVS_SUFFIX ".vs"
 
 /* VS file magic number */
 #define WT_VS_RANGE_MAGIC "WTVS"
@@ -64,13 +71,69 @@ struct __wt_vs_range {
 };
 
 /*
- * WT_VS_ENTRY --
- *     A single entry extracted from WiredTigerVS log file.
+ * WT_PREPVS_ENTRY --
+ *     A single entry extracted from WiredTigerPrepVS log file.
  */
-struct __wt_vs_entry {
+struct __wt_prepvs_entry {
     uint32_t btree_id;               /* B-tree identifier */
     WT_ITEM key;                     /* Key */
     WT_ITEM vid;                     /* Version ID */
     WT_ITEM value;                   /* Value */
+};
+
+/*
+ * Per-leaf VS file format structures.
+ * File name: LeafVS_<btree_id>_<page_id>.vs
+ */
+
+/* LeafVS file magic */
+#define WT_LEAFVS_MAGIC "LVSS"
+#define WT_LEAFVS_FORMAT_VERSION 1
+
+/*
+ * WT_LEAFVS_FILE_HEADER --
+ *     Header for per-leaf LeafVS file.
+ */
+struct __wt_leafvs_file_header {
+    char magic[4];                   /* "LVSS" */
+    uint32_t version;                /* Format version */
+    uint32_t btree_id;               /* B-tree identifier */
+    uint64_t page_id;                /* Leaf page identifier */
+    uint64_t key_count;              /* Number of unique keys */
+    uint64_t version_count;          /* Total number of versions */
+    uint64_t index_offset;           /* Offset to index section */
+    uint64_t data_size;              /* Size of data section */
+};
+
+/*
+ * WT_LEAFVS_VER --
+ *     A single version of a key (vid + value).
+ */
+struct __wt_leafvs_ver {
+    WT_ITEM vid;                     /* Version ID */
+    WT_ITEM value;                   /* Value for this version */
+};
+
+/*
+ * WT_LEAFVS_KEY_GROUP --
+ *     All versions of a single key.
+ */
+struct __wt_leafvs_key_group {
+    WT_ITEM key;                     /* The key */
+    WT_LEAFVS_VER *versions;         /* Array of versions (sorted by vid) */
+    uint32_t version_count;          /* Number of versions */
+    uint32_t version_alloc;          /* Allocated size */
+};
+
+/*
+ * WT_LEAFVS_FILE --
+ *     In-memory representation of a per-leaf LeafVS file.
+ */
+struct __wt_leafvs_file {
+    uint32_t btree_id;               /* B-tree identifier */
+    uint64_t page_id;                /* Leaf page identifier */
+    WT_LEAFVS_KEY_GROUP *groups;     /* Array of key groups (sorted by key) */
+    uint32_t group_count;            /* Number of key groups */
+    uint32_t group_alloc;            /* Allocated size */
 };
 

@@ -647,6 +647,8 @@ extern int __wt_cursor_reopen_notsup(WT_CURSOR *cursor, bool check_only)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_cursor_search_near_notsup(WT_CURSOR *cursor, int *exact)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+extern int __wt_cursor_search_with_vid_notsup(WT_CURSOR *cursor)
+  WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_cursor_set_keyv(WT_CURSOR *cursor, uint64_t flags, va_list ap)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_cursor_set_valuev(WT_CURSOR *cursor, const char *fmt, va_list ap)
@@ -1751,9 +1753,29 @@ extern int __wt_verify_dsk(WT_SESSION_IMPL *session, const char *tag, WT_ITEM *b
 extern int __wt_verify_dsk_image(WT_SESSION_IMPL *session, const char *tag,
   const WT_PAGE_HEADER *dsk, size_t size, WT_ADDR *addr, uint32_t verify_flags)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
-extern int __wt_vs_find_leaf_page(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range,
-  uint32_t btree_id, WT_ITEM *key, uint64_t *page_idp)
+extern int __wt_vs_compact_check(WT_SESSION_IMPL *session)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+extern int __wt_vs_compact_create(WT_SESSION_IMPL *session)
+  WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+extern int __wt_vs_compact_destroy(WT_SESSION_IMPL *session)
+  WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+extern int __wt_leafvs_file_add_entry(WT_SESSION_IMPL *session, WT_LEAFVS_FILE *vs_file, const WT_ITEM *key,
+  const WT_ITEM *vid, const WT_ITEM *value) WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+extern int __wt_leafvs_file_destroy(WT_SESSION_IMPL *session, WT_LEAFVS_FILE **vs_filep)
+  WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+extern int __wt_leafvs_file_init(WT_SESSION_IMPL *session, WT_LEAFVS_FILE **vs_filep, uint32_t btree_id,
+  uint64_t page_id) WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+extern int __wt_leafvs_file_load(WT_SESSION_IMPL *session, uint32_t btree_id, uint64_t page_id,
+  WT_LEAFVS_FILE **vs_filep) WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+extern int __wt_leafvs_file_save(WT_SESSION_IMPL *session, WT_LEAFVS_FILE *vs_file)
+  WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+extern int __wt_leafvs_file_search(WT_SESSION_IMPL *session, WT_LEAFVS_FILE *vs_file, const WT_ITEM *key,
+  const WT_ITEM *vid, WT_ITEM *value) WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+extern int __wt_vs_find_leaf_page(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range,
+  uint32_t btree_id, const WT_ITEM *key, uint64_t *page_idp)
+  WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+extern int __wt_prepvs_parse_file(WT_SESSION_IMPL *session, const char *filename,
+  WT_PREPVS_ENTRY **entriesp, uint32_t *countp) WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_vs_range_add_range(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range,
   uint32_t btree_id, const char *uri, uint64_t page_id, WT_ITEM *min_key, WT_ITEM *max_key)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
@@ -1768,6 +1790,8 @@ extern int __wt_vs_range_init(WT_SESSION_IMPL *session, WT_VS_RANGE **vs_rangep)
 extern int __wt_vs_range_load(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_vs_range_save(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range)
+  WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+extern int __wt_vs_range_update_on_split(WT_SESSION_IMPL *session, WT_RECONCILE *r)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int64_t __wt_log_slot_release(WT_MYSLOT *myslot, int64_t size)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
@@ -2031,6 +2055,7 @@ extern void __wt_verbose_timestamp(WT_SESSION_IMPL *session, wt_timestamp_t ts, 
 extern void __wt_verbose_worker(WT_SESSION_IMPL *session, WT_VERBOSE_CATEGORY category,
   WT_VERBOSE_LEVEL level, const char *fmt, ...) WT_GCC_FUNC_DECL_ATTRIBUTE((format(printf, 4, 5)))
   WT_GCC_FUNC_DECL_ATTRIBUTE((cold));
+extern void __wt_prepvs_entries_free(WT_SESSION_IMPL *session, WT_PREPVS_ENTRY **entriesp, uint32_t count);
 extern void __wt_writelock(WT_SESSION_IMPL *session, WT_RWLOCK *l);
 extern void __wt_writeunlock(WT_SESSION_IMPL *session, WT_RWLOCK *l);
 static inline WT_BTREE *__wt_curhs_get_btree(WT_CURSOR *cursor)

@@ -483,8 +483,8 @@ __log_rename_to_vstore_int(
         WT_DECL_ITEM(from_path);
         WT_DECL_ITEM(to_path);
 
-        /* Skip files that are already renamed to version store format */
-        if (strstr(logfiles[i], "WiredTigerVS.") != NULL)
+        /* Skip files that are already renamed to PrepVS format */
+        if (strstr(logfiles[i], WT_PREPVS_PREFIX) != NULL)
             continue;
 
         WT_RET(__wt_log_extract_lognum(session, logfiles[i], &lognum));
@@ -495,8 +495,8 @@ __log_rename_to_vstore_int(
             /* Build the source path (e.g., "journal/WiredTigerLog.0000000001") */
             WT_ERR(__wt_log_filename(session, lognum, WT_LOG_FILENAME, from_path));
 
-            /* Build the destination path with WiredTigerVS prefix */
-            WT_ERR(__wt_buf_fmt(session, to_path, "%s%sWiredTigerVS.%010" PRIu32,
+            /* Build the destination path with WiredTigerPrepVS prefix */
+            WT_ERR(__wt_buf_fmt(session, to_path, "%s%s" WT_PREPVS_PREFIX "%010" PRIu32,
               conn->log_path != NULL ? conn->log_path : "",
               conn->log_path != NULL ? "/" : "",
               lognum));
@@ -1190,6 +1190,13 @@ __wt_logmgr_open(WT_SESSION_IMPL *session)
         WT_RET(__wt_vs_range_init(session, &conn->vs_range));
         /* Try to load existing metadata, ignore if not found */
         WT_RET_NOTFOUND_OK(__wt_vs_range_load(session, conn->vs_range));
+
+        /* Start the VS compaction thread if threshold is set */
+        if (conn->vs_compact_threshold > 0) {
+            WT_RET(__wt_open_internal_session(
+              conn, "vs-compact-server", false, session_flags, 0, &conn->vs_compact_session));
+            WT_RET(__wt_vs_compact_create(conn->vs_compact_session));
+        }
     }
 
     return (0);
@@ -1265,6 +1272,15 @@ __wt_logmgr_destroy(WT_SESSION_IMPL *session)
     __wt_spin_destroy(session, &conn->log->log_writelsn_lock);
     __wt_free(session, conn->log_path);
     __wt_free(session, conn->log);
+
+    /* Destroy VS compaction thread if it was started */
+    if (conn->vs_compact_tid_set) {
+        WT_TRET(__wt_vs_compact_destroy(session));
+    }
+    if (conn->vs_compact_session != NULL) {
+        WT_TRET(__wt_session_close_internal(conn->vs_compact_session));
+        conn->vs_compact_session = NULL;
+    }
 
     /* Destroy version store metadata if it was initialized */
     if (conn->vs_range != NULL) {

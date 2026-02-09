@@ -183,7 +183,7 @@ __wt_vs_range_clear_btree(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range, uint3
  *     Returns: -1 if key < min_key, 0 if in range, 1 if key > max_key
  */
 static int
-__vs_key_compare(WT_ITEM *key, WT_VS_KEY_RANGE *range)
+__vs_key_compare(const WT_ITEM *key, WT_VS_KEY_RANGE *range)
 {
     int cmp;
 
@@ -208,7 +208,7 @@ __vs_key_compare(WT_ITEM *key, WT_VS_KEY_RANGE *range)
  */
 int
 __wt_vs_find_leaf_page(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range,
-    uint32_t btree_id, WT_ITEM *key, uint64_t *page_idp)
+    uint32_t btree_id, const WT_ITEM *key, uint64_t *page_idp)
 {
     WT_VS_BTREE_RANGE *btree_meta;
     WT_VS_KEY_RANGE *ranges;
@@ -334,6 +334,71 @@ err:
     __wt_scr_free(session, &first_key);
     __wt_scr_free(session, &last_key);
     return (ret);
+}
+
+/*
+ * __wt_vs_range_update_on_split --
+ *     Update vs_range when a page is split during reconciliation.
+ *     This replaces the old page's range with multiple new ranges.
+ */
+int
+__wt_vs_range_update_on_split(WT_SESSION_IMPL *session, WT_RECONCILE *r)
+{
+    WT_BTREE *btree;
+    WT_CONNECTION_IMPL *conn;
+    WT_MULTI *multi;
+    WT_VS_RANGE *vs_range;
+    WT_ITEM min_key, max_key;
+    uint32_t i;
+
+    btree = S2BT(session);
+    conn = S2C(session);
+
+    /* Only process blue: btrees with version store enabled */
+    if (btree->dhandle == NULL || btree->dhandle->name == NULL ||
+        strncmp(btree->dhandle->name, "blue:", 5) != 0)
+        return (0);
+
+    vs_range = conn->vs_range;
+    if (vs_range == NULL)
+        return (0);
+
+    /* Only process leaf page splits (multi_next > 1) */
+    if (r->multi_next <= 1)
+        return (0);
+
+    /* Clear existing ranges for this btree and add new ones */
+    WT_RET(__wt_vs_range_clear_btree(session, vs_range, btree->id));
+
+    /* Add a range for each split page */
+    for (i = 0; i < r->multi_next; ++i) {
+        multi = &r->multi[i];
+
+        /* Get the key for this split page (first key of the page) */
+        if (multi->key.ikey != NULL) {
+            min_key.data = WT_IKEY_DATA(multi->key.ikey);
+            min_key.size = multi->key.ikey->size;
+        } else {
+            /* Skip if no key available */
+            continue;
+        }
+
+        /* For the last key, use the next page's first key - 1, or estimate */
+        if (i + 1 < r->multi_next && r->multi[i + 1].key.ikey != NULL) {
+            /* Use next page's first key as an approximation for max_key */
+            max_key.data = WT_IKEY_DATA(r->multi[i + 1].key.ikey);
+            max_key.size = r->multi[i + 1].key.ikey->size;
+        } else {
+            /* Last page - use min_key as max_key (will be updated later) */
+            max_key.data = min_key.data;
+            max_key.size = min_key.size;
+        }
+
+        WT_RET(__wt_vs_range_add_range(session, vs_range, btree->id,
+            btree->dhandle->name, (uint64_t)i, &min_key, &max_key));
+    }
+
+    return (0);
 }
 
 /*

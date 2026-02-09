@@ -484,6 +484,10 @@ struct __wt_connection_impl {
     uint32_t log_flags;                    /* Global logging configuration */
     uint32_t vs_compact_threshold;         /* VS files count to trigger compaction */
     WT_VS_RANGE *vs_range;                 /* Version store key range metadata */
+    WT_CONDVAR *vs_compact_cond;           /* VS compact server wait mutex */
+    WT_SESSION_IMPL *vs_compact_session;   /* VS compact server session */
+    wt_thread_t vs_compact_tid;            /* VS compact server thread */
+    bool vs_compact_tid_set;               /* VS compact server thread set */
     WT_CONDVAR *log_cond;                  /* Log server wait mutex */
     WT_SESSION_IMPL *log_session;          /* Log server session */
     wt_thread_t log_tid;                   /* Log server thread */

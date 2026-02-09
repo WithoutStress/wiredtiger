@@ -472,6 +472,18 @@ struct __wt_cursor {
 	int __F(search)(WT_CURSOR *cursor);
 
 	/*!
+	 * Return the record matching the key and version ID. The key and
+	 * version ID must first be set using set_key_with_vid.
+	 *
+	 * This method searches for a specific version of a key in the
+	 * version store files.
+	 *
+	 * @param cursor the cursor handle
+	 * @errors
+	 */
+	int __F(search_with_vid)(WT_CURSOR *cursor);
+
+	/*!
 	 * Return the record matching the key if it exists, or an adjacent
 	 * record.  An adjacent record is either the smallest record larger
 	 * than the key or the largest record smaller than the key (in other

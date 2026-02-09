@@ -809,10 +809,6 @@ __wt_rec_row_leaf(
         __wt_row_leaf_value_cell(session, page, rip, vpack);
 
         /* Look for an update. */
-        /* 
-         * TODO: kyu-jin: The kv with older version id could not select to be written on disk because there might be no transaction watching it 
-         * but in our case, this kind of kv pairs should also be written on disk, especially on the history store file.
-         */
         WT_ERR(__wt_rec_upd_select(session, r, NULL, rip, vpack, &upd_select));
         upd = upd_select.upd;
 

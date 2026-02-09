@@ -110,8 +110,8 @@ __rec_append_orig_value(
          * possible for an update on the chain to be globally visible and followed by an (earlier)
          * update that is not yet globally visible.
          */
-        // if (WT_UPDATE_DATA_VALUE(upd) && __wt_txn_upd_visible_all(session, upd))
-        //     return (0);
+        if (WT_UPDATE_DATA_VALUE(upd) && __wt_txn_upd_visible_all(session, upd))
+            return (0);
 
         if (upd->txnid != WT_TXN_ABORTED)
             oldest_upd = upd;

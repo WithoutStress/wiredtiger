@@ -317,7 +317,7 @@ __wt_update_serial(WT_SESSION_IMPL *session, WT_CURSOR_BTREE *cbt, WT_PAGE *page
         page->modify->obsolete_check_txn = WT_TXN_NONE;
     }
 
-    // __wt_update_obsolete_check(session, cbt, upd->next, true);
+    __wt_update_obsolete_check(session, cbt, upd->next, true);
 
     return (0);
 }

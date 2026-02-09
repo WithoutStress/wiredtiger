@@ -1563,7 +1563,7 @@ __split_multi_inmem_final(WT_SESSION_IMPL *session, WT_PAGE *orig, WT_MULTI *mul
     uint32_t i, slot;
 
     /* If we have saved updates, we must have decided to restore them to the new page. */
-    // WT_ASSERT(session, multi->supd_entries == 0 || multi->supd_restore);
+    WT_ASSERT(session, multi->supd_entries == 0 || multi->supd_restore);
 
     /*
      * We successfully created new in-memory pages. For error-handling reasons, we've left the
@@ -1672,8 +1672,8 @@ __wt_multi_to_ref(WT_SESSION_IMPL *session, WT_PAGE *page, WT_MULTI *multi, WT_R
     WT_ASSERT(session, !closing || multi->supd == NULL);
 
     /* If we don't have a disk image, we can't restore the saved updates. */
-    // WT_ASSERT(
-    //   session, multi->disk_image != NULL || (multi->supd_entries == 0 && !multi->supd_restore));
+    WT_ASSERT(
+       session, multi->disk_image != NULL || (multi->supd_entries == 0 && !multi->supd_restore));
 
     /* Verify any disk image we have. */
     WT_ASSERT_OPTIONAL(session, WT_DIAGNOSTIC_DISK_VALIDATE,
