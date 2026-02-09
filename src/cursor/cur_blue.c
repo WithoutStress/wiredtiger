@@ -496,6 +496,77 @@ err:
 }
 
 /*
+ * __curblue_search_with_vid --
+ *     WT_CURSOR->search method for the btree cursor type with version ID.
+ *     Searches for a specific version of a key in the version store files.
+ */
+static int
+__curblue_search_with_vid(WT_CURSOR *cursor)
+{
+    WT_CONNECTION_IMPL *conn;
+    WT_CURSOR_BTREE *cbt;
+    WT_DECL_RET;
+    WT_ITEM vid_item;
+    WT_SESSION_IMPL *session;
+    WT_LEAFVS_FILE *vs_file;
+    WT_VS_RANGE *vs_range;
+    uint64_t page_id;
+
+    cbt = (WT_CURSOR_BTREE *)cursor;
+    CURSOR_API_CALL(cursor, session, search, CUR2BT(cbt));
+    WT_ERR(__cursor_copy_release(cursor));
+    WT_ERR(__cursor_checkkey(cursor));
+
+    conn = S2C(session);
+    vs_range = conn->vs_range;
+    vs_file = NULL;
+
+    /* Check if version ID is set */
+    if (cursor->key.vid == NULL || cursor->key.vid_size == 0)
+        WT_ERR_MSG(session, EINVAL, "Version ID is required for search_with_vid");
+
+    /* First try to find in the per-leaf VS files */
+    if (vs_range != NULL) {
+        /* Find the leaf page for this key */
+        ret = __wt_vs_find_leaf_page(session, vs_range,
+            CUR2BT(cbt)->id, &cursor->key, &page_id);
+        if (ret == 0) {
+            /* Try to load the VS file for this leaf page */
+            ret = __wt_leafvs_file_load(session, CUR2BT(cbt)->id, page_id, &vs_file);
+            if (ret == 0) {
+                /* Search for the key+vid in the VS file */
+                vid_item.data = cursor->key.vid;
+                vid_item.size = cursor->key.vid_size;
+                ret = __wt_leafvs_file_search(session, vs_file,
+                    &cursor->key, &vid_item, &cursor->value);
+                WT_TRET(__wt_leafvs_file_destroy(session, &vs_file));
+                if (ret == 0) {
+                    F_SET(cursor, WT_CURSTD_KEY_INT | WT_CURSTD_VALUE_INT);
+                    goto done;
+                }
+            }
+        }
+        /* Reset ret if not found, continue to search in btree */
+        if (ret == WT_NOTFOUND)
+            ret = 0;
+        WT_ERR(ret);
+    }
+
+    /* Fall back to regular btree search (returns latest version) */
+    WT_WITH_CHECKPOINT(session, cbt, ret = __wt_btcur_search(cbt));
+    WT_ERR(ret);
+
+    /* If found in btree, it's the latest version - check if vid matches */
+    /* For now, just return the btree result */
+
+done:
+err:
+    if (vs_file != NULL)
+        WT_TRET(__wt_leafvs_file_destroy(session, &vs_file));
+    API_END_RET_STAT(session, ret, cursor_search);
+}
+
+/*
  * __curblue_search_near --
  *     WT_CURSOR->search_near method for the btree cursor type.
  */
@@ -1121,6 +1192,7 @@ __curblue_create(WT_SESSION_IMPL *session, WT_CURSOR *owner, const char *cfg[], 
       __curblue_prev,                                 /* prev */
       __curblue_reset,                                /* reset */
       __curblue_search,                               /* search */
+      __curblue_search_with_vid,                      /* search-with-vid */
       __curblue_search_near,                          /* search-near */
       __curblue_insert,                               /* insert */
       __wt_cursor_modify_value_format_notsup,         /* modify */

@@ -100,6 +100,7 @@ __wt_apply_single_idx(WT_SESSION_IMPL *session, WT_INDEX *idx, WT_CURSOR *cur,
       __wt_cursor_notsup,                             /* prev */
       __wt_cursor_notsup,                             /* reset */
       __wt_cursor_notsup,                             /* search */
+      __wt_cursor_search_with_vid_notsup,             /* search-with-vid */
       __wt_cursor_search_near_notsup,                 /* search-near */
       __curextract_insert,                            /* insert */
       __wt_cursor_modify_notsup,                      /* modify */
@@ -1064,6 +1065,7 @@ __wt_curtable_open(WT_SESSION_IMPL *session, const char *uri, WT_CURSOR *owner, 
       __curtable_prev,                                  /* prev */
       __curtable_reset,                                 /* reset */
       __curtable_search,                                /* search */
+      __wt_cursor_search_with_vid_notsup,               /* search-with-vid */
       __curtable_search_near,                           /* search-near */
       __curtable_insert,                                /* insert */
       __wt_cursor_modify_notsup,                        /* modify */

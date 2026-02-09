@@ -1090,8 +1090,8 @@ __curhs_insert(WT_CURSOR *cursor)
      * TODO: kyu-jin: In case of reading old version, this might be not work    
      * because we don't know the exact length of data and vid in that time, so we need to consider this case later.
      */
-    if(hs_upd->vid_size != 0)
-        hs_upd->size += file_cursor->value.vid_size;
+    // if(hs_upd->vid_size != 0)
+    //    hs_upd->size += file_cursor->value.vid_size;
 
     /*
      * Allocate a tombstone only when there is a valid stop time point, and insert the standard
@@ -1100,7 +1100,7 @@ __curhs_insert(WT_CURSOR *cursor)
     // TODO: kyu-jin: This kind of implementation cannot support turn on/off the S3 bucket dynamically
     if (hs_upd->vid_size == 0 && WT_TIME_WINDOW_HAS_STOP(&hs_cursor->time_window)) {
         /* We should not see a tombstone with max transaction id. */
-        // WT_ASSERT(session, hs_cursor->time_window.stop_txn != WT_TXN_MAX);
+        WT_ASSERT(session, hs_cursor->time_window.stop_txn != WT_TXN_MAX);
         if(hs_cursor->time_window.stop_txn == WT_TXN_MAX) {
             goto err;
         }
@@ -1120,7 +1120,7 @@ __curhs_insert(WT_CURSOR *cursor)
         hs_tombstone->next = hs_upd;
         hs_upd = hs_tombstone;
     }
-    // (void)hs_tombstone;
+    
     do {
         WT_WITH_PAGE_INDEX(session, ret = __curhs_search(cbt, true));
         WT_ERR(ret);
@@ -1373,6 +1373,7 @@ __wt_curhs_open(WT_SESSION_IMPL *session, WT_CURSOR *owner, WT_CURSOR **cursorp)
       __curhs_prev,                                   /* prev */
       __curhs_reset,                                  /* reset */
       __wt_cursor_notsup,                             /* search */
+      __wt_cursor_search_with_vid_notsup,             /* search-with-vid */
       __curhs_search_near,                            /* search-near */
       __curhs_insert,                                 /* insert */
       __wt_cursor_modify_value_format_notsup,         /* modify */

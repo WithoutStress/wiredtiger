@@ -614,6 +614,7 @@ __wt_curversion_open(WT_SESSION_IMPL *session, const char *uri, WT_CURSOR *owner
       __wt_cursor_notsup,                              /* prev */
       __curversion_reset,                              /* reset */
       __curversion_search,                             /* search */
+      __wt_cursor_search_with_vid_notsup,             /* search-with-vid */
       __wt_cursor_search_near_notsup,                  /* search-near */
       __wt_cursor_notsup,                              /* insert */
       __wt_cursor_modify_notsup,                       /* modify */

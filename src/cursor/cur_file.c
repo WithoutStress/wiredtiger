@@ -956,6 +956,7 @@ __curfile_create(WT_SESSION_IMPL *session, WT_CURSOR *owner, const char *cfg[], 
       __curfile_prev,                                 /* prev */
       __curfile_reset,                                /* reset */
       __curfile_search,                               /* search */
+      __wt_cursor_search_with_vid_notsup,             /* search-with-vid */
       __curfile_search_near,                          /* search-near */
       __curfile_insert,                               /* insert */
       __wt_cursor_modify_value_format_notsup,         /* modify */

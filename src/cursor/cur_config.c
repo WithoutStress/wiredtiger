@@ -49,6 +49,7 @@ __wt_curconfig_open(
       __wt_cursor_notsup,                             /* prev */
       __wt_cursor_noop,                               /* reset */
       __wt_cursor_notsup,                             /* search */
+      __wt_cursor_search_with_vid_notsup,             /* search-with-vid */
       __wt_cursor_search_near_notsup,                 /* search-near */
       __wt_cursor_notsup,                             /* insert */
       __wt_cursor_modify_notsup,                      /* modify */

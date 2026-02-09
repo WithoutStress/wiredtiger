@@ -575,6 +575,7 @@ __wt_curindex_open(WT_SESSION_IMPL *session, const char *uri, WT_CURSOR *owner, 
       __curindex_prev,                                /* prev */
       __curindex_reset,                               /* reset */
       __curindex_search,                              /* search */
+      __wt_cursor_search_with_vid_notsup,             /* search-with-vid */
       __curindex_search_near,                         /* search-near */
       __wt_cursor_notsup,                             /* insert */
       __wt_cursor_modify_notsup,                      /* modify */

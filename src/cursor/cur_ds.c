@@ -445,6 +445,7 @@ __wt_curds_open(WT_SESSION_IMPL *session, const char *uri, WT_CURSOR *owner, con
       __curds_prev,                                   /* prev */
       __curds_reset,                                  /* reset */
       __curds_search,                                 /* search */
+      __wt_cursor_search_with_vid_notsup,             /* search-with-vid */
       __curds_search_near,                            /* search-near */
       __curds_insert,                                 /* insert */
       __wt_cursor_modify_value_format_notsup,         /* modify */

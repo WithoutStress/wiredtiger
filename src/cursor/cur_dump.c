@@ -407,6 +407,7 @@ __wt_curdump_create(WT_CURSOR *child, WT_CURSOR *owner, WT_CURSOR **cursorp)
       __curdump_prev,                               /* prev */
       __curdump_reset,                              /* reset */
       __curdump_search,                             /* search */
+      __wt_cursor_search_with_vid_notsup,             /* search-with-vid */
       __curdump_search_near,                        /* search-near */
       __curdump_insert,                             /* insert */
       __wt_cursor_modify_notsup,                    /* modify */

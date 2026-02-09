@@ -592,6 +592,7 @@ __wt_curmetadata_open(WT_SESSION_IMPL *session, const char *uri, WT_CURSOR *owne
       __curmetadata_prev,                             /* prev */
       __curmetadata_reset,                            /* reset */
       __curmetadata_search,                           /* search */
+      __wt_cursor_search_with_vid_notsup,             /* search-with-vid */
       __curmetadata_search_near,                      /* search-near */
       __curmetadata_insert,                           /* insert */
       __wt_cursor_modify_notsup,                      /* modify */

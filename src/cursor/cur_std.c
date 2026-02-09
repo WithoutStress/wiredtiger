@@ -219,6 +219,16 @@ __wt_cursor_modify_value_format_notsup(WT_CURSOR *cursor, WT_MODIFY *entries, in
 }
 
 /*
+ * __wt_cursor_search_with_vid_notsup --
+ *     Unsupported cursor search-with-vid.
+ */
+int
+__wt_cursor_search_with_vid_notsup(WT_CURSOR *cursor)
+{
+    return (__wt_cursor_notsup(cursor));
+}
+
+/*
  * __wt_cursor_search_near_notsup --
  *     Unsupported cursor search-near.
  */
