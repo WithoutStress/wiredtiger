@@ -199,6 +199,48 @@ err:
 }
 
 /*
+ * __wt_vs_compact_remaining --
+ *     Compact all remaining PrepVS files regardless of threshold. Called during connection close.
+ */
+int
+__wt_vs_compact_remaining(WT_SESSION_IMPL *session)
+{
+    WT_DECL_RET;
+    char **vs_files;
+    uint32_t count, i;
+
+    vs_files = NULL;
+    count = 0;
+
+    /* Get list of remaining PrepVS files */
+    WT_RET(__prepvs_get_files(session, &vs_files, &count));
+
+    if (count == 0)
+        return (0);
+
+    __wt_verbose(session, WT_VERB_LOG,
+        "PrepVS compaction on close: processing %u remaining file(s)", (unsigned int)count);
+
+    /* Process each remaining PrepVS file */
+    for (i = 0; i < count; i++) {
+        ret = __prepvs_compact_process_file(session, vs_files[i]);
+        if (ret != 0) {
+            __wt_verbose(session, WT_VERB_LOG,
+                "PrepVS compaction on close: error processing %s: %s",
+                vs_files[i], wiredtiger_strerror(ret));
+            ret = 0;
+        }
+    }
+
+    if (vs_files != NULL) {
+        for (i = 0; i < count; i++)
+            __wt_free(session, vs_files[i]);
+        __wt_free(session, vs_files);
+    }
+    return (ret);
+}
+
+/*
  * __wt_vs_compact_server --
  *     VS compaction server thread entry point.
  */

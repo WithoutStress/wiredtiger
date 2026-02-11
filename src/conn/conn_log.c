@@ -1273,10 +1273,14 @@ __wt_logmgr_destroy(WT_SESSION_IMPL *session)
     __wt_free(session, conn->log_path);
     __wt_free(session, conn->log);
 
-    /* Destroy VS compaction thread if it was started */
+    /* Destroy VS compaction thread first to avoid race conditions */
     if (conn->vs_compact_tid_set) {
         WT_TRET(__wt_vs_compact_destroy(session));
     }
+
+    /* Compact any remaining PrepVS files after the thread is stopped */
+    if (conn->vs_compact_session != NULL)
+        WT_TRET(__wt_vs_compact_remaining(conn->vs_compact_session));
     if (conn->vs_compact_session != NULL) {
         WT_TRET(__wt_session_close_internal(conn->vs_compact_session));
         conn->vs_compact_session = NULL;
