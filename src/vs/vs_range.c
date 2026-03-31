@@ -95,10 +95,11 @@ __vs_range_find_btree(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range,
 
     /* Grow array if needed */
     if (vs_range->btree_count >= vs_range->btree_alloc) {
-        size_t alloc_size = vs_range->btree_alloc;
-        WT_RET(__wt_realloc_def(session, &alloc_size,
-            vs_range->btree_count + 10, &vs_range->btrees));
-        vs_range->btree_alloc = (uint32_t)alloc_size;
+        uint32_t new_alloc = vs_range->btree_count + 10;
+        size_t alloc_bytes = (size_t)vs_range->btree_alloc * sizeof(WT_VS_BTREE_RANGE);
+        WT_RET(__wt_realloc_def(session, &alloc_bytes,
+            new_alloc, &vs_range->btrees));
+        vs_range->btree_alloc = new_alloc;
     }
 
     /* Initialize new entry */
@@ -113,6 +114,39 @@ __vs_range_find_btree(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range,
 }
 
 /*
+ * __vs_range_add_range_locked --
+ *     Internal: add a key range assuming the caller already holds the write lock.
+ */
+static int
+__vs_range_add_range_locked(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range,
+    uint32_t btree_id, const char *uri, uint64_t page_id,
+    WT_ITEM *min_key, WT_ITEM *max_key)
+{
+    WT_VS_BTREE_RANGE *btree_meta;
+    WT_VS_KEY_RANGE *range;
+
+    WT_RET(__vs_range_find_btree(session, vs_range, btree_id, uri, &btree_meta, true));
+
+    /* Grow ranges array if needed */
+    if (btree_meta->range_count >= btree_meta->range_alloc) {
+        uint32_t new_alloc = btree_meta->range_count + 100;
+        size_t alloc_bytes = (size_t)btree_meta->range_alloc * sizeof(WT_VS_KEY_RANGE);
+        WT_RET(__wt_realloc_def(session, &alloc_bytes,
+            new_alloc, &btree_meta->ranges));
+        btree_meta->range_alloc = new_alloc;
+    }
+
+    /* Add new range */
+    range = &btree_meta->ranges[btree_meta->range_count++];
+    memset(range, 0, sizeof(*range));
+    range->page_id = page_id;
+    WT_RET(__wt_buf_set(session, &range->min_key, min_key->data, min_key->size));
+    WT_RET(__wt_buf_set(session, &range->max_key, max_key->data, max_key->size));
+
+    return (0);
+}
+
+/*
  * __wt_vs_range_add_range --
  *     Add a key range for a leaf page to the metadata.
  */
@@ -122,45 +156,23 @@ __wt_vs_range_add_range(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range,
     WT_ITEM *min_key, WT_ITEM *max_key)
 {
     WT_DECL_RET;
-    WT_VS_BTREE_RANGE *btree_meta;
-    WT_VS_KEY_RANGE *range;
 
     __wt_writelock(session, &vs_range->lock);
-
-    WT_ERR(__vs_range_find_btree(session, vs_range, btree_id, uri, &btree_meta, true));
-
-    /* Grow ranges array if needed */
-    if (btree_meta->range_count >= btree_meta->range_alloc) {
-        size_t alloc_size = btree_meta->range_alloc;
-        WT_ERR(__wt_realloc_def(session, &alloc_size,
-            btree_meta->range_count + 100, &btree_meta->ranges));
-        btree_meta->range_alloc = (uint32_t)alloc_size;
-    }
-
-    /* Add new range */
-    range = &btree_meta->ranges[btree_meta->range_count++];
-    memset(range, 0, sizeof(*range));
-    range->page_id = page_id;
-    WT_ERR(__wt_buf_set(session, &range->min_key, min_key->data, min_key->size));
-    WT_ERR(__wt_buf_set(session, &range->max_key, max_key->data, max_key->size));
-
-err:
+    ret = __vs_range_add_range_locked(session, vs_range, btree_id, uri, page_id, min_key, max_key);
     __wt_writeunlock(session, &vs_range->lock);
     return (ret);
 }
 
 /*
- * __wt_vs_range_clear_btree --
- *     Clear all key ranges for a btree (called before rebuilding during checkpoint).
+ * __vs_range_clear_btree_locked --
+ *     Internal: clear all key ranges assuming the caller already holds the write lock.
  */
-int
-__wt_vs_range_clear_btree(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range, uint32_t btree_id)
+static int
+__vs_range_clear_btree_locked(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range, uint32_t btree_id)
 {
     WT_VS_BTREE_RANGE *btree_meta;
     WT_VS_KEY_RANGE *range;
     uint32_t i;
-
-    __wt_writelock(session, &vs_range->lock);
 
     if (__vs_range_find_btree(session, vs_range, btree_id, NULL, &btree_meta, false) == 0 &&
         btree_meta != NULL) {
@@ -173,38 +185,49 @@ __wt_vs_range_clear_btree(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range, uint3
         btree_meta->range_count = 0;
     }
 
+    return (0);
+}
+
+/*
+ * __wt_vs_range_clear_btree --
+ *     Clear all key ranges for a btree (called before rebuilding during checkpoint).
+ */
+int
+__wt_vs_range_clear_btree(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range, uint32_t btree_id)
+{
+    __wt_writelock(session, &vs_range->lock);
+    __vs_range_clear_btree_locked(session, vs_range, btree_id);
     __wt_writeunlock(session, &vs_range->lock);
     return (0);
 }
 
 /*
- * __vs_key_compare --
- *     Compare a key against a key range.
- *     Returns: -1 if key < min_key, 0 if in range, 1 if key > max_key
+ * __vs_key_cmp --
+ *     Lexicographic comparison of two WT_ITEMs.
+ *     Returns negative, 0, or positive like memcmp.
  */
 static int
-__vs_key_compare(const WT_ITEM *key, WT_VS_KEY_RANGE *range)
+__vs_key_cmp(const WT_ITEM *a, const WT_ITEM *b)
 {
     int cmp;
+    size_t min_size;
 
-    /* Compare with min_key */
-    cmp = memcmp(key->data, range->min_key.data,
-        WT_MIN(key->size, range->min_key.size));
-    if (cmp < 0 || (cmp == 0 && key->size < range->min_key.size))
-        return (-1);
-
-    /* Compare with max_key */
-    cmp = memcmp(key->data, range->max_key.data,
-        WT_MIN(key->size, range->max_key.size));
-    if (cmp > 0 || (cmp == 0 && key->size > range->max_key.size))
-        return (1);
-
-    return (0);
+    min_size = WT_MIN(a->size, b->size);
+    if (min_size > 0)
+        cmp = memcmp(a->data, b->data, min_size);
+    else
+        cmp = 0;
+    if (cmp != 0)
+        return (cmp);
+    return (a->size < b->size ? -1 : (a->size > b->size ? 1 : 0));
 }
 
 /*
  * __wt_vs_find_leaf_page --
- *     Find the leaf page ID for a given key using binary search.
+ *     Find the leaf page ID for a given key using separator-based binary search.
+ *     Ranges are stored with separator-based min_key boundaries in sorted order.
+ *     Finds the last range whose min_key <= key (upper-bound search).
+ *     Keys smaller than the first separator still route to page 0.
  */
 int
 __wt_vs_find_leaf_page(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range,
@@ -212,7 +235,7 @@ __wt_vs_find_leaf_page(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range,
 {
     WT_VS_BTREE_RANGE *btree_meta;
     WT_VS_KEY_RANGE *ranges;
-    uint32_t lo, hi, mid;
+    uint32_t lo, hi, mid, count;
     int cmp;
 
     *page_idp = 0;
@@ -226,114 +249,31 @@ __wt_vs_find_leaf_page(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range,
     }
 
     ranges = btree_meta->ranges;
-    lo = 0;
-    hi = btree_meta->range_count;
+    count = btree_meta->range_count;
 
-    /* Binary search for the key range containing this key */
+    /*
+     * Binary search: find the largest index where min_key <= key.
+     * After the loop, lo is the insertion point (upper bound).
+     * The target range is at index (lo - 1), or 0 if key < all separators.
+     */
+    lo = 0;
+    hi = count;
     while (lo < hi) {
         mid = lo + (hi - lo) / 2;
-        cmp = __vs_key_compare(key, &ranges[mid]);
-
-        if (cmp == 0) {
-            /* Key is in this range */
-            *page_idp = ranges[mid].page_id;
-            __wt_readunlock(session, &vs_range->lock);
-            return (0);
-        } else if (cmp < 0) {
-            hi = mid;
-        } else {
+        cmp = __vs_key_cmp(key, &ranges[mid].min_key);
+        if (cmp >= 0)
             lo = mid + 1;
-        }
+        else
+            hi = mid;
     }
 
+    /*
+     * lo == 0 means key < all separators.  Route to the first page since
+     * it covers [-inf, sep[1]).  Otherwise the target is (lo - 1).
+     */
+    *page_idp = ranges[lo > 0 ? lo - 1 : 0].page_id;
     __wt_readunlock(session, &vs_range->lock);
-    return (WT_NOTFOUND);
-}
-
-/*
- * __wt_vs_range_collect_btree_ranges --
- *     Walk a B-tree and collect key ranges for each leaf page.
- */
-int
-__wt_vs_range_collect_btree_ranges(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range)
-{
-    WT_BTREE *btree;
-    WT_CURSOR *cursor;
-    WT_DECL_ITEM(first_key);
-    WT_DECL_ITEM(last_key);
-    WT_DECL_RET;
-    WT_REF *ref;
-    WT_SESSION *wt_session;
-    uint64_t page_id;
-    bool first_in_page;
-
-    btree = S2BT(session);
-    wt_session = (WT_SESSION *)session;
-    cursor = NULL;
-    page_id = 0;
-
-    /* Only process row-store btrees */
-    if (btree->type != BTREE_ROW)
-        return (0);
-
-    /* Clear existing ranges for this btree */
-    WT_RET(__wt_vs_range_clear_btree(session, vs_range, btree->id));
-
-    WT_RET(__wt_scr_alloc(session, 0, &first_key));
-    WT_RET(__wt_scr_alloc(session, 0, &last_key));
-
-    /* Open a cursor on this btree */
-    WT_ERR(wt_session->open_cursor(wt_session, btree->dhandle->name, NULL, NULL, &cursor));
-
-    first_in_page = true;
-    ref = NULL;
-
-    /* Walk through all keys */
-    while ((ret = cursor->next(cursor)) == 0) {
-        WT_ITEM key;
-        WT_CURSOR_BTREE *cbt;
-
-        WT_ERR(cursor->get_key(cursor, &key));
-        cbt = (WT_CURSOR_BTREE *)cursor;
-
-        /* Check if we moved to a new page */
-        if (ref != cbt->ref) {
-            /* Save the previous page's range if we have one */
-            if (ref != NULL && first_key->size > 0) {
-                WT_ERR(__wt_vs_range_add_range(session, vs_range, btree->id,
-                    btree->dhandle->name, page_id, first_key, last_key));
-                page_id++;
-            }
-
-            /* Start a new page */
-            ref = cbt->ref;
-            first_in_page = true;
-        }
-
-        if (first_in_page) {
-            WT_ERR(__wt_buf_set(session, first_key, key.data, key.size));
-            first_in_page = false;
-        }
-
-        /* Always update last_key */
-        WT_ERR(__wt_buf_set(session, last_key, key.data, key.size));
-    }
-
-    /* Save the last page's range */
-    if (first_key->size > 0) {
-        WT_ERR(__wt_vs_range_add_range(session, vs_range, btree->id,
-            btree->dhandle->name, page_id, first_key, last_key));
-    }
-
-    if (ret == WT_NOTFOUND)
-        ret = 0;
-
-err:
-    if (cursor != NULL)
-        WT_TRET(cursor->close(cursor));
-    __wt_scr_free(session, &first_key);
-    __wt_scr_free(session, &last_key);
-    return (ret);
+    return (0);
 }
 
 /*
@@ -346,10 +286,7 @@ __wt_vs_range_update_on_split(WT_SESSION_IMPL *session, WT_RECONCILE *r)
 {
     WT_BTREE *btree;
     WT_CONNECTION_IMPL *conn;
-    WT_MULTI *multi;
     WT_VS_RANGE *vs_range;
-    WT_ITEM min_key, max_key;
-    uint32_t i;
 
     btree = S2BT(session);
     conn = S2C(session);
@@ -367,37 +304,16 @@ __wt_vs_range_update_on_split(WT_SESSION_IMPL *session, WT_RECONCILE *r)
     if (r->multi_next <= 1)
         return (0);
 
-    /* Clear existing ranges for this btree and add new ones */
-    WT_RET(__wt_vs_range_clear_btree(session, vs_range, btree->id));
+    /*
+     * The previous implementation cleared btree ranges and rebuilt them from split fragments
+     * only, which could leave vs_range incomplete. Instead, mark a deferred rebuild request and
+     * let the VS compaction thread refresh ranges and LeafVS files consistently.
+     */
+    ++conn->vs_leafvs_split_gen;
+    if (conn->vs_compact_cond != NULL)
+        __wt_cond_signal(session, conn->vs_compact_cond);
 
-    /* Add a range for each split page */
-    for (i = 0; i < r->multi_next; ++i) {
-        multi = &r->multi[i];
-
-        /* Get the key for this split page (first key of the page) */
-        if (multi->key.ikey != NULL) {
-            min_key.data = WT_IKEY_DATA(multi->key.ikey);
-            min_key.size = multi->key.ikey->size;
-        } else {
-            /* Skip if no key available */
-            continue;
-        }
-
-        /* For the last key, use the next page's first key - 1, or estimate */
-        if (i + 1 < r->multi_next && r->multi[i + 1].key.ikey != NULL) {
-            /* Use next page's first key as an approximation for max_key */
-            max_key.data = WT_IKEY_DATA(r->multi[i + 1].key.ikey);
-            max_key.size = r->multi[i + 1].key.ikey->size;
-        } else {
-            /* Last page - use min_key as max_key (will be updated later) */
-            max_key.data = min_key.data;
-            max_key.size = min_key.size;
-        }
-
-        WT_RET(__wt_vs_range_add_range(session, vs_range, btree->id,
-            btree->dhandle->name, (uint64_t)i, &min_key, &max_key));
-    }
-
+    WT_UNUSED(vs_range);
     return (0);
 }
 
@@ -581,11 +497,12 @@ __wt_vs_range_load(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range)
 
             /* Grow ranges array if needed */
             if (btree_meta->range_count >= btree_meta->range_alloc) {
-                size_t alloc_size = btree_meta->range_alloc;
-                if ((ret = __wt_realloc_def(session, &alloc_size,
-                    btree_meta->range_count + 100, &btree_meta->ranges)) != 0)
+                uint32_t new_alloc = btree_meta->range_count + 100;
+                size_t alloc_bytes = (size_t)btree_meta->range_alloc * sizeof(WT_VS_KEY_RANGE);
+                if ((ret = __wt_realloc_def(session, &alloc_bytes,
+                    new_alloc, &btree_meta->ranges)) != 0)
                     goto err_unlock;
-                btree_meta->range_alloc = (uint32_t)alloc_size;
+                btree_meta->range_alloc = new_alloc;
             }
 
             range = &btree_meta->ranges[btree_meta->range_count++];

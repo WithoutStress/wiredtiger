@@ -15,7 +15,37 @@ typedef struct {
     WT_PREPVS_ENTRY *entries;
     uint32_t count;
     uint32_t alloc;
+    uint32_t total_count;
+    uint32_t chunk_entries;
+    WT_PREPVS_CHUNK_HANDLER handler;
+    void *cookie;
 } WT_PREPVS_PARSE_STATE;
+
+/*
+ * __prepvs_parse_state_flush --
+ *     Deliver a parsed PrepVS chunk to the caller and release its memory.
+ */
+static int
+__prepvs_parse_state_flush(WT_SESSION_IMPL *session, WT_PREPVS_PARSE_STATE *state)
+{
+    WT_DECL_RET;
+    uint32_t i;
+
+    if (state->count == 0)
+        return (0);
+
+    if (state->handler != NULL)
+        WT_ERR(state->handler(session, state->entries, state->count, state->cookie));
+
+err:
+    for (i = 0; i < state->count; i++) {
+        __wt_buf_free(session, &state->entries[i].key);
+        __wt_buf_free(session, &state->entries[i].vid);
+        __wt_buf_free(session, &state->entries[i].value);
+    }
+    state->count = 0;
+    return (ret);
+}
 
 /*
  * __prepvs_parse_record --
@@ -68,9 +98,12 @@ __prepvs_parse_record(WT_SESSION_IMPL *session, WT_ITEM *record, WT_LSN *lsnp,
 
             /* Allocate more space if needed */
             if (state->count >= state->alloc) {
-                uint32_t new_alloc = state->count + 16;
+                uint32_t new_alloc;
                 WT_PREPVS_ENTRY *new_entries;
 
+                new_alloc = state->chunk_entries != 0 ? state->chunk_entries : state->count + 16;
+                if (new_alloc < state->count + 1)
+                    new_alloc = state->count + 1;
                 WT_RET(__wt_calloc_def(session, new_alloc, &new_entries));
                 if (state->entries != NULL) {
                     memcpy(new_entries, state->entries, state->count * sizeof(WT_PREPVS_ENTRY));
@@ -101,6 +134,10 @@ __prepvs_parse_record(WT_SESSION_IMPL *session, WT_ITEM *record, WT_LSN *lsnp,
                 WT_RET(__wt_buf_set(session, &entry->vid, key.vid, key.vid_size));
 
             state->count++;
+            state->total_count++;
+            if (state->handler != NULL && state->chunk_entries != 0 &&
+              state->count >= state->chunk_entries)
+                WT_RET(__prepvs_parse_state_flush(session, state));
         } else {
             /* Skip other operation types */
             p += opsize;
@@ -214,6 +251,101 @@ err:
             __wt_buf_free(session, &state.entries[i].vid);
             __wt_buf_free(session, &state.entries[i].value);
         }
+        __wt_free(session, state.entries);
+    }
+    __wt_buf_free(session, &buf);
+    if (fh != NULL)
+        WT_TRET(__wt_close(session, &fh));
+    return (ret);
+}
+
+/*
+ * __wt_prepvs_parse_file_chunked --
+ *     Parse a WiredTigerPrepVS file and deliver entries in bounded chunks.
+ */
+int
+__wt_prepvs_parse_file_chunked(WT_SESSION_IMPL *session, const char *filename,
+  uint32_t chunk_entries, WT_PREPVS_CHUNK_HANDLER handler, void *cookie, uint32_t *countp)
+{
+    WT_CONNECTION_IMPL *conn;
+    WT_DECL_RET;
+    WT_FH *fh;
+    WT_ITEM buf;
+    WT_LOG_RECORD *logrec;
+    WT_LSN lsn;
+    WT_PREPVS_PARSE_STATE state;
+    size_t allocsize, offset;
+    wt_off_t file_size;
+    uint32_t lognum;
+    bool need_salvage;
+
+    conn = S2C(session);
+    fh = NULL;
+    memset(&buf, 0, sizeof(buf));
+    memset(&state, 0, sizeof(state));
+    allocsize = (conn->log != NULL) ? conn->log->allocsize : WT_LOG_ALIGN;
+    state.chunk_entries = chunk_entries;
+    state.handler = handler;
+    state.cookie = cookie;
+
+    {
+        const char *basename;
+        basename = strrchr(filename, '/');
+        basename = basename != NULL ? basename + 1 : filename;
+        if (sscanf(basename, WT_PREPVS_PREFIX "%010" SCNu32, &lognum) != 1)
+            WT_RET_MSG(session, EINVAL, "Invalid PrepVS filename: %s", filename);
+    }
+
+    WT_RET(__wt_open(session, filename, WT_FS_OPEN_FILE_TYPE_REGULAR, WT_FS_OPEN_READONLY, &fh));
+    WT_ERR(__wt_filesize(session, fh, &file_size));
+
+    offset = allocsize;
+    while ((wt_off_t)offset < file_size) {
+        WT_ITEM record;
+        uint32_t reclen;
+
+        WT_ERR(__wt_buf_grow(session, &buf, sizeof(WT_LOG_RECORD)));
+        WT_ERR(__wt_read(session, fh, (wt_off_t)offset, sizeof(WT_LOG_RECORD), buf.mem));
+        logrec = (WT_LOG_RECORD *)buf.mem;
+        __wt_log_record_byteswap(logrec);
+
+        reclen = logrec->len;
+        if (reclen == 0 || reclen > (uint32_t)(file_size - (wt_off_t)offset))
+            break;
+
+        WT_ERR(__wt_buf_grow(session, &buf, reclen));
+        WT_ERR(__wt_read(session, fh, (wt_off_t)offset, reclen, buf.mem));
+        logrec = (WT_LOG_RECORD *)buf.mem;
+        __wt_log_record_byteswap(logrec);
+
+        need_salvage = false;
+        {
+            uint32_t saved_checksum, computed_checksum;
+            saved_checksum = logrec->checksum;
+            logrec->checksum = 0;
+            computed_checksum = __wt_checksum(logrec, reclen);
+            logrec->checksum = saved_checksum;
+            if (saved_checksum != computed_checksum)
+                need_salvage = true;
+        }
+
+        if (!need_salvage) {
+            WT_SET_LSN(&lsn, lognum, (uint32_t)offset);
+            record.data = buf.mem;
+            record.size = reclen;
+            WT_ERR(__prepvs_parse_record(session, &record, &lsn, NULL, &state, 0));
+        }
+
+        offset += WT_ALIGN(reclen, allocsize);
+    }
+
+    WT_ERR(__prepvs_parse_state_flush(session, &state));
+    if (countp != NULL)
+        *countp = state.total_count;
+
+err:
+    if (state.entries != NULL) {
+        WT_TRET(__prepvs_parse_state_flush(session, &state));
         __wt_free(session, state.entries);
     }
     __wt_buf_free(session, &buf);

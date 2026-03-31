@@ -488,6 +488,8 @@ struct __wt_connection_impl {
     WT_SESSION_IMPL *vs_compact_session;   /* VS compact server session */
     wt_thread_t vs_compact_tid;            /* VS compact server thread */
     bool vs_compact_tid_set;               /* VS compact server thread set */
+    uint64_t vs_leafvs_split_gen;          /* Tree shape generation from leaf splits */
+    uint64_t vs_leafvs_rebuild_gen;        /* Last generation reconciled into VS metadata */
     WT_CONDVAR *log_cond;                  /* Log server wait mutex */
     WT_SESSION_IMPL *log_session;          /* Log server session */
     wt_thread_t log_tid;                   /* Log server thread */

@@ -122,6 +122,13 @@ __wt_connection_close(WT_CONNECTION_IMPL *conn)
         WT_TRET(__wt_txn_checkpoint_log(session, true, WT_TXN_LOG_CKPT_STOP, NULL));
     WT_TRET(__wt_logmgr_destroy(session));
 
+    /*
+     * Close-time log and version-store shutdown can reopen metadata and user dhandles while
+     * compacting remaining version store state. Discard any handles reopened in that phase before
+     * tearing down the cache and file handles.
+     */
+    WT_TRET(__wt_conn_dhandle_discard(session));
+
     /* Free memory for collators, compressors, data sources. */
     WT_TRET(__wt_conn_remove_collator(session));
     WT_TRET(__wt_conn_remove_compressor(session));

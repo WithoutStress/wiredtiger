@@ -254,15 +254,14 @@ err:
 }
 
 /*
- * __wt_leafvs_file_load --
- *     Load VS file from disk.
+ * __wt_leafvs_file_load_path --
+ *     Load a LeafVS file from an explicit path.
  */
 int
-__wt_leafvs_file_load(WT_SESSION_IMPL *session, uint32_t btree_id, uint64_t page_id,
-    WT_LEAFVS_FILE **leafvs_filep)
+__wt_leafvs_file_load_path(
+  WT_SESSION_IMPL *session, const char *filename, WT_LEAFVS_FILE **leafvs_filep)
 {
     WT_DECL_ITEM(buf);
-    WT_DECL_ITEM(path);
     WT_DECL_RET;
     WT_FH *fh;
     WT_LEAFVS_FILE *leafvs_file;
@@ -277,20 +276,16 @@ __wt_leafvs_file_load(WT_SESSION_IMPL *session, uint32_t btree_id, uint64_t page
     fh = NULL;
     leafvs_file = NULL;
     WT_RET(__wt_scr_alloc(session, 0, &buf));
-    WT_RET(__wt_scr_alloc(session, 0, &path));
-
-    /* Build file path */
-    WT_ERR(__leafleafvs_file_path(session, btree_id, page_id, path));
 
     /* Check if file exists */
-    WT_ERR(__wt_fs_exist(session, path->data, &exists));
+    WT_ERR(__wt_fs_exist(session, filename, &exists));
     if (!exists) {
         ret = WT_NOTFOUND;
         goto err;
     }
 
     /* Open file for reading */
-    WT_ERR(__wt_open(session, path->data, WT_FS_OPEN_FILE_TYPE_REGULAR, 0, &fh));
+    WT_ERR(__wt_open(session, filename, WT_FS_OPEN_FILE_TYPE_REGULAR, 0, &fh));
 
     /* Read header */
     offset = 0;
@@ -305,7 +300,7 @@ __wt_leafvs_file_load(WT_SESSION_IMPL *session, uint32_t btree_id, uint64_t page
     }
 
     /* Initialize VS file */
-    WT_ERR(__wt_leafvs_file_init(session, &leafvs_file, btree_id, page_id));
+    WT_ERR(__wt_leafvs_file_init(session, &leafvs_file, header.btree_id, header.page_id));
 
     /* Read key groups */
     for (i = 0; i < header.key_count; i++) {
@@ -375,6 +370,25 @@ err:
     if (fh != NULL)
         WT_TRET(__wt_close(session, &fh));
     __wt_scr_free(session, &buf);
+    return (ret);
+}
+
+/*
+ * __wt_leafvs_file_load --
+ *     Load VS file from disk.
+ */
+int
+__wt_leafvs_file_load(
+  WT_SESSION_IMPL *session, uint32_t btree_id, uint64_t page_id, WT_LEAFVS_FILE **leafvs_filep)
+{
+    WT_DECL_ITEM(path);
+    WT_DECL_RET;
+
+    WT_RET(__wt_scr_alloc(session, 0, &path));
+    WT_ERR(__leafleafvs_file_path(session, btree_id, page_id, path));
+    WT_ERR(__wt_leafvs_file_load_path(session, path->data, leafvs_filep));
+
+err:
     __wt_scr_free(session, &path);
     return (ret);
 }

@@ -1188,6 +1188,12 @@ __wt_logmgr_open(WT_SESSION_IMPL *session)
     /* Initialize version store metadata if version_store is enabled */
     if (FLD_ISSET(conn->log_flags, WT_CONN_LOG_VERSION_STORE)) {
         WT_RET(__wt_vs_range_init(session, &conn->vs_range));
+        /*
+         * Force one startup refresh even if we loaded persisted metadata. The on-disk snapshot is
+         * only a bootstrap hint once checkpoint-path saving is removed from the hot path.
+         */
+        conn->vs_leafvs_split_gen = 1;
+        conn->vs_leafvs_rebuild_gen = 0;
         /* Try to load existing metadata, ignore if not found */
         WT_RET_NOTFOUND_OK(__wt_vs_range_load(session, conn->vs_range));
 
@@ -1196,6 +1202,7 @@ __wt_logmgr_open(WT_SESSION_IMPL *session)
             WT_RET(__wt_open_internal_session(
               conn, "vs-compact-server", false, session_flags, 0, &conn->vs_compact_session));
             WT_RET(__wt_vs_compact_create(conn->vs_compact_session));
+            __wt_cond_signal(session, conn->vs_compact_cond);
         }
     }
 
@@ -1278,13 +1285,16 @@ __wt_logmgr_destroy(WT_SESSION_IMPL *session)
         WT_TRET(__wt_vs_compact_destroy(session));
     }
 
-    /* Compact any remaining PrepVS files after the thread is stopped */
-    if (conn->vs_compact_session != NULL)
-        WT_TRET(__wt_vs_compact_remaining(conn->vs_compact_session));
     if (conn->vs_compact_session != NULL) {
         WT_TRET(__wt_session_close_internal(conn->vs_compact_session));
         conn->vs_compact_session = NULL;
     }
+
+    /*
+     * Do not drain remaining PrepVS work during close. Close should hand off durable backlog
+     * promptly, and the next startup/background compaction pass will refresh vs_range and resume
+     * redistribution.
+     */
 
     /* Destroy version store metadata if it was initialized */
     if (conn->vs_range != NULL) {

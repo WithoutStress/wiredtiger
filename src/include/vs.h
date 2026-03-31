@@ -81,6 +81,9 @@ struct __wt_prepvs_entry {
     WT_ITEM value;                   /* Value */
 };
 
+typedef int (*WT_PREPVS_CHUNK_HANDLER)(
+  WT_SESSION_IMPL *session, WT_PREPVS_ENTRY *entries, uint32_t count, void *cookie);
+
 /*
  * Per-leaf VS file format structures.
  * File name: LeafVS_<btree_id>_<page_id>.vs
@@ -136,4 +139,3 @@ struct __wt_leafvs_file {
     uint32_t group_count;            /* Number of key groups */
     uint32_t group_alloc;            /* Allocated size */
 };
-

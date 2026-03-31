@@ -1769,6 +1769,8 @@ extern int __wt_leafvs_file_init(WT_SESSION_IMPL *session, WT_LEAFVS_FILE **vs_f
   uint64_t page_id) WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_leafvs_file_load(WT_SESSION_IMPL *session, uint32_t btree_id, uint64_t page_id,
   WT_LEAFVS_FILE **vs_filep) WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+extern int __wt_leafvs_file_load_path(WT_SESSION_IMPL *session, const char *filename,
+  WT_LEAFVS_FILE **vs_filep) WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_leafvs_file_save(WT_SESSION_IMPL *session, WT_LEAFVS_FILE *vs_file)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_leafvs_file_search(WT_SESSION_IMPL *session, WT_LEAFVS_FILE *vs_file, const WT_ITEM *key,
@@ -1778,13 +1780,14 @@ extern int __wt_vs_find_leaf_page(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_rang
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_prepvs_parse_file(WT_SESSION_IMPL *session, const char *filename,
   WT_PREPVS_ENTRY **entriesp, uint32_t *countp) WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+extern int __wt_prepvs_parse_file_chunked(WT_SESSION_IMPL *session, const char *filename,
+  uint32_t chunk_entries, WT_PREPVS_CHUNK_HANDLER handler, void *cookie, uint32_t *countp)
+  WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_vs_range_add_range(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range,
   uint32_t btree_id, const char *uri, uint64_t page_id, WT_ITEM *min_key, WT_ITEM *max_key)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_vs_range_clear_btree(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range,
   uint32_t btree_id) WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
-extern int __wt_vs_range_collect_btree_ranges(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range)
-  WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_vs_range_destroy(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_vs_range_init(WT_SESSION_IMPL *session, WT_VS_RANGE **vs_rangep)

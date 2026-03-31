@@ -573,10 +573,10 @@ __rec_row_leaf_insert(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_INSERT *ins)
                 val->len = 0;
             else {
                 /* Take the value from the update. */
-                if(upd->vid_size != 0)
-                    WT_ERR(__wt_rec_cell_build_val_with_vid(session, r, upd, &tw, 0));
-                else
-                    WT_ERR(__wt_rec_cell_build_val(session, r, upd->data, upd->size, &tw, 0));
+                // if(upd->vid_size != 0)
+                //    WT_ERR(__wt_rec_cell_build_val_with_vid(session, r, upd, &tw, 0));
+                //else
+                  WT_ERR(__wt_rec_cell_build_val(session, r, upd->data, upd->size, &tw, 0));
             }
             break;
         case WT_UPDATE_TOMBSTONE:
@@ -628,10 +628,10 @@ __rec_row_leaf_insert(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_INSERT *ins)
             r->all_empty_value = false;
             if (btree->dictionary)
                 WT_ERR(__wt_rec_dict_replace(session, r, &tw, 0, val));
-            if(val->buf.vid_size > 0)
-                __wt_rec_image_copy_with_vid(session, r, val);
-            else 
-                __wt_rec_image_copy(session, r, val);
+            // if(val->buf.vid_size > 0)
+            //    __wt_rec_image_copy_with_vid(session, r, val);
+            //else 
+            __wt_rec_image_copy(session, r, val);
         }
         WT_TIME_AGGREGATE_UPDATE(session, &r->cur_ptr->ta, &tw);
 
@@ -863,9 +863,11 @@ __wt_rec_row_leaf(
                     WT_ERR(__rec_cell_repack(session, btree, r, vpack, twp));
 
                 dictionary = true;
-            } else if (vpack->raw == WT_CELL_VALUE_WITH_VID) {
-                WT_ERR(__rec_cell_repack_with_vid(session, btree, r, vpack, twp));
-            } else {
+            } 
+            // else if (vpack->raw == WT_CELL_VALUE_WITH_VID) {
+            //    WT_ERR(__rec_cell_repack_with_vid(session, btree, r, vpack, twp));
+            //} 
+            else {
                 val->buf.data = vpack->cell;
                 val->buf.size = __wt_cell_total_len(vpack);
                 val->cell_len = 0;
@@ -908,10 +910,10 @@ __wt_rec_row_leaf(
                 break;
             case WT_UPDATE_STANDARD:
                 /* Take the value from the update. */
-                if(upd->vid_size != 0)
-                    WT_ERR(__wt_rec_cell_build_val_with_vid(session, r, upd, twp, 0));
-                else
-                    WT_ERR(__wt_rec_cell_build_val(session, r, upd->data, upd->size, twp, 0));
+                // if(upd->vid_size != 0)
+                //    WT_ERR(__wt_rec_cell_build_val_with_vid(session, r, upd, twp, 0));
+                //else
+                WT_ERR(__wt_rec_cell_build_val(session, r, upd->data, upd->size, twp, 0));
                 dictionary = true;
                 break;
             case WT_UPDATE_TOMBSTONE:
@@ -1053,9 +1055,9 @@ slow:
             r->all_empty_value = false;
             if (dictionary && btree->dictionary)
                 WT_ERR(__wt_rec_dict_replace(session, r, twp, 0, val));
-            if(val->buf.vid_size > 0)
-                __wt_rec_image_copy_with_vid(session, r, val);
-            else 
+            //if(val->buf.vid_size > 0)
+            //    __wt_rec_image_copy_with_vid(session, r, val);
+            //else 
                 __wt_rec_image_copy(session, r, val);
         }
         WT_TIME_AGGREGATE_UPDATE(session, &r->cur_ptr->ta, twp);

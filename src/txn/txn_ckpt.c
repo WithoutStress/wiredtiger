@@ -1304,13 +1304,6 @@ __txn_checkpoint(WT_SESSION_IMPL *session, const char *cfg[])
             conn->txn_global.last_ckpt_timestamp = WT_TS_NONE;
     }
 
-    /* Save version store metadata after successful checkpoint */
-    /* Note: vs_range is now updated at page split time via __wt_vs_range_update_on_split */
-    if (full && conn->vs_range != NULL) {
-        conn->vs_range->checkpoint_gen++;
-        WT_TRET(__wt_vs_range_save(session, conn->vs_range));
-    }
-
 err:
     /*
      * Reset the timer so that next checkpoint tracks the progress only if configured.

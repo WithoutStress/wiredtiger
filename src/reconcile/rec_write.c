@@ -2589,8 +2589,9 @@ __rec_write_wrapup(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_PAGE *page)
             WT_STAT_DATA_INCR(session, rec_multiblock_internal);
         else {
             WT_STAT_DATA_INCR(session, rec_multiblock_leaf);
-            /* Update vs_range for blue: btrees when leaf page splits */
-            WT_RET(__wt_vs_range_update_on_split(session, r));
+            /* Update vs_range for blue: btrees when leaf page splits (only if version_store enabled) */
+            if (FLD_ISSET(S2C(session)->log_flags, WT_CONN_LOG_VERSION_STORE))
+                WT_RET(__wt_vs_range_update_on_split(session, r));
         }
 
         /* Optionally display the actual split keys in verbose mode. */
