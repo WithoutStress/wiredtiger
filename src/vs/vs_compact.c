@@ -1209,3 +1209,73 @@ __wt_vs_compact_destroy(WT_SESSION_IMPL *session)
 
     return (ret);
 }
+
+/*
+ * __wt_vs_server_create --
+ *     Initialize version store metadata and start the VS compaction server thread.
+ */
+int
+__wt_vs_server_create(WT_SESSION_IMPL *session)
+{
+    WT_CONNECTION_IMPL *conn;
+    uint32_t session_flags;
+
+    conn = S2C(session);
+
+    if (!FLD_ISSET(conn->log_flags, WT_CONN_LOG_ENABLED) ||
+      !FLD_ISSET(conn->log_flags, WT_CONN_LOG_VERSION_STORE))
+        return (0);
+
+    WT_RET(__wt_vs_range_init(session, &conn->vs_range));
+
+    /*
+     * Force one startup refresh even if we loaded persisted metadata. The on-disk snapshot is only
+     * a bootstrap hint once checkpoint-path saving is removed from the hot path.
+     */
+    conn->vs_leafvs_split_gen = 1;
+    conn->vs_leafvs_rebuild_gen = 0;
+    WT_RET_NOTFOUND_OK(__wt_vs_range_load(session, conn->vs_range));
+
+    if (conn->vs_compact_threshold > 0) {
+        session_flags = WT_SESSION_NO_DATA_HANDLES;
+        WT_RET(__wt_open_internal_session(
+          conn, "vs-compact-server", false, session_flags, 0, &conn->vs_compact_session));
+        WT_RET(__wt_vs_compact_create(conn->vs_compact_session));
+        __wt_cond_signal(session, conn->vs_compact_cond);
+    }
+
+    return (0);
+}
+
+/*
+ * __wt_vs_server_destroy --
+ *     Shut down the VS compaction server thread and destroy associated metadata.
+ */
+int
+__wt_vs_server_destroy(WT_SESSION_IMPL *session)
+{
+    WT_CONNECTION_IMPL *conn;
+    WT_DECL_RET;
+
+    conn = S2C(session);
+
+    if (conn->vs_compact_tid_set)
+        WT_TRET(__wt_vs_compact_destroy(session));
+
+    if (conn->vs_compact_session != NULL) {
+        WT_TRET(__wt_session_close_internal(conn->vs_compact_session));
+        conn->vs_compact_session = NULL;
+    }
+
+    /*
+     * Do not drain remaining PrepVS work during close. Close should hand off durable backlog
+     * promptly, and the next startup/background compaction pass will refresh vs_range and resume
+     * redistribution.
+     */
+    if (conn->vs_range != NULL) {
+        WT_TRET(__wt_vs_range_destroy(session, conn->vs_range));
+        conn->vs_range = NULL;
+    }
+
+    return (ret);
+}

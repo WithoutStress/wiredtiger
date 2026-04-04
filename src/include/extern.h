@@ -1761,6 +1761,10 @@ extern int __wt_vs_compact_create(WT_SESSION_IMPL *session)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_vs_compact_destroy(WT_SESSION_IMPL *session)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+extern int __wt_vs_server_create(WT_SESSION_IMPL *session)
+  WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
+extern int __wt_vs_server_destroy(WT_SESSION_IMPL *session)
+  WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_leafvs_file_add_entry(WT_SESSION_IMPL *session, WT_LEAFVS_FILE *vs_file, const WT_ITEM *key,
   const WT_ITEM *vid, const WT_ITEM *value) WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_leafvs_file_destroy(WT_SESSION_IMPL *session, WT_LEAFVS_FILE **vs_filep)

@@ -94,6 +94,7 @@ __wt_connection_close(WT_CONNECTION_IMPL *conn)
     WT_TRET(__wt_statlog_destroy(session, true));
     WT_TRET(__wt_tiered_storage_destroy(session, false));
     WT_TRET(__wt_sweep_destroy(session));
+    WT_TRET(__wt_vs_server_destroy(session));
 
     /* The eviction server is shut down last. */
     WT_TRET(__wt_evict_destroy(session));
@@ -123,9 +124,8 @@ __wt_connection_close(WT_CONNECTION_IMPL *conn)
     WT_TRET(__wt_logmgr_destroy(session));
 
     /*
-     * Close-time log and version-store shutdown can reopen metadata and user dhandles while
-     * compacting remaining version store state. Discard any handles reopened in that phase before
-     * tearing down the cache and file handles.
+     * Discard any handles reopened during late shutdown cleanup before tearing down the cache and
+     * file handles.
      */
     WT_TRET(__wt_conn_dhandle_discard(session));
 
@@ -244,6 +244,7 @@ __wt_connection_workers(WT_SESSION_IMPL *session, const char *cfg[])
      * started before any operation that can commit, or the commit can block.
      */
     WT_RET(__wt_logmgr_open(session));
+    WT_RET(__wt_vs_server_create(session));
 
     /*
      * Start eviction threads. NOTE: Eviction must be started after the history store table is
