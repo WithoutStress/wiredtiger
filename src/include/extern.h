@@ -1796,10 +1796,6 @@ extern int __wt_vs_range_destroy(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_vs_range_init(WT_SESSION_IMPL *session, WT_VS_RANGE **vs_rangep)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
-extern int __wt_vs_range_load(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range)
-  WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
-extern int __wt_vs_range_save(WT_SESSION_IMPL *session, WT_VS_RANGE *vs_range)
-  WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int __wt_vs_range_update_on_split(WT_SESSION_IMPL *session, WT_RECONCILE *r)
   WT_GCC_FUNC_DECL_ATTRIBUTE((warn_unused_result));
 extern int64_t __wt_log_slot_release(WT_MYSLOT *myslot, int64_t size)

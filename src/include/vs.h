@@ -21,19 +21,12 @@
  * - LeafVS: Per-leaf page version files (LeafVS_<btree_id>_<page_id>.vs)
  */
 
-/* VS key range file name */
-#define WT_VS_RANGE_FILE "WiredTiger.vs_range"
-
 /* PrepVS (preparatory VS) file prefix - log-structured temp files */
 #define WT_PREPVS_PREFIX "WiredTigerPrepVS."
 
 /* LeafVS (per-leaf VS) file prefix and suffix */
 #define WT_LEAFVS_PREFIX "LeafVS_"
 #define WT_LEAFVS_SUFFIX ".vs"
-
-/* VS file magic number */
-#define WT_VS_RANGE_MAGIC "WTVS"
-#define WT_VS_RANGE_VERSION 1
 
 /*
  * WT_VS_KEY_RANGE --

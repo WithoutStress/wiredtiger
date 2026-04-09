@@ -678,7 +678,6 @@ __vs_range_refresh_all(WT_SESSION_IMPL *session)
     __wt_writelock(session, &vs_range->lock);
     vs_range->checkpoint_gen++;
     __wt_writeunlock(session, &vs_range->lock);
-    WT_ERR(__wt_vs_range_save(session, vs_range));
     time_stop = __wt_clock(session);
     printf("VS compact server: refreshed vs_range for %u blue trees in %" PRIu64 " ms\n",
       count, WT_CLOCKDIFF_MS(time_stop, time_start));
@@ -1229,12 +1228,13 @@ __wt_vs_server_create(WT_SESSION_IMPL *session)
     WT_RET(__wt_vs_range_init(session, &conn->vs_range));
 
     /*
-     * Force one startup refresh even if we loaded persisted metadata. The on-disk snapshot is only
-     * a bootstrap hint once checkpoint-path saving is removed from the hot path.
+     * Rebuild the in-memory range map synchronously before historical lookups can run, then leave
+     * the initial generation pending so the background server can resume any required LeafVS
+     * redistribution work.
      */
     conn->vs_leafvs_split_gen = 1;
     conn->vs_leafvs_rebuild_gen = 0;
-    WT_RET_NOTFOUND_OK(__wt_vs_range_load(session, conn->vs_range));
+    WT_RET(__vs_range_refresh_all(session));
 
     if (conn->vs_compact_threshold > 0) {
         session_flags = WT_SESSION_NO_DATA_HANDLES;
